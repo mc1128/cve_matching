@@ -1,0 +1,44 @@
+# FastAPI 웹 프레임워크
+fastapi==0.116.1
+uvicorn==0.35.0
+pydantic==2.11.7
+
+# 데이터베이스
+psycopg2-binary==2.9.10
+sqlalchemy==2.0.23
+
+# 비동기 작업 처리
+celery==5.3.4
+redis==5.0.1
+
+# AWS 및 AI
+boto3==1.40.21
+langchain==0.0.350
+
+# 유틸리티
+python-dotenv==1.1.1
+pydantic-settings==2.1.0
+python-multipart==0.0.6
+
+# HTTP 클라이언트
+httpx==0.25.2
+requests==2.32.5
+
+# 데이터 처리
+pandas==2.3.2
+numpy==1.26.2
+
+# 이메일
+email-validator==2.1.0
+
+# 로깅 및 모니터링
+loguru==0.7.2
+
+# 테스트
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# 개발 도구
+black==23.11.0
+flake8==6.1.0
+isort==5.13.0
