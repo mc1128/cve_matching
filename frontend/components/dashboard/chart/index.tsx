@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import mockDataJson from "@/mock.json"
 import { Bullet } from "@/components/ui/bullet"
 import type { MockData, TimePeriod } from "@/types/dashboard"
+import { useChartData } from "@/hooks/use-api"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const mockData = mockDataJson as MockData
 
@@ -33,9 +35,15 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-export default function DashboardChart() {
+interface DashboardChartProps {
+  useApiData?: boolean;
+}
+
+export default function DashboardChart({ useApiData = false }: DashboardChartProps) {
   const [activeTab, setActiveTab] = React.useState<TimePeriod>("week")
   const [mounted, setMounted] = React.useState(false)
+  
+  const { data: apiChartData, loading: chartLoading, error: chartError } = useChartData(activeTab);
 
   React.useEffect(() => {
     setMounted(true)
@@ -46,6 +54,9 @@ export default function DashboardChart() {
       setActiveTab(value as TimePeriod)
     }
   }
+
+  // API 데이터가 있으면 사용하고, 없으면 mock 데이터 사용
+  const chartData = useApiData && apiChartData ? apiChartData : mockData.chartData[activeTab];
 
   const formatYAxisValue = (value: number) => {
     if (value === 0) {
@@ -61,10 +72,18 @@ export default function DashboardChart() {
   }
 
   const renderChart = (data: ChartDataPoint[]) => {
-    if (!mounted || !data || data.length === 0) {
+    if (!mounted || chartLoading) {
       return (
         <div className="bg-accent rounded-lg p-3 h-[200px] flex items-center justify-center">
-          <span className="text-muted-foreground">Loading chart...</span>
+          <Skeleton className="w-full h-full" />
+        </div>
+      )
+    }
+
+    if (!data || data.length === 0) {
+      return (
+        <div className="bg-accent rounded-lg p-3 h-[200px] flex items-center justify-center">
+          <span className="text-muted-foreground">No chart data available</span>
         </div>
       )
     }
@@ -190,13 +209,13 @@ export default function DashboardChart() {
         </div>
       </div>
       <TabsContent value="week" className="space-y-4">
-        {renderChart(mockData.chartData.week)}
+        {renderChart(chartData)}
       </TabsContent>
       <TabsContent value="month" className="space-y-4">
-        {renderChart(mockData.chartData.month)}
+        {renderChart(chartData)}
       </TabsContent>
       <TabsContent value="year" className="space-y-4">
-        {renderChart(mockData.chartData.year)}
+        {renderChart(chartData)}
       </TabsContent>
     </Tabs>
   )
