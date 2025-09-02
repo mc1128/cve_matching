@@ -62,12 +62,42 @@ function AssetComponents({ assetId }: { assetId: number }) {
   const handleCPEMatching = async (componentId: number) => {
     setLoadingCPE(componentId)
     try {
-      await api.triggerCPEMatching(componentId)
-      // 성공 시 컴포넌트 데이터 새로고침
-      window.location.reload() // 임시적으로 페이지 새로고침
+      const result = await api.triggerCPEMatching(componentId)
+      
+      if (result.success) {
+        // 성공적으로 매칭된 경우
+        if (result.method === 'automatic' || result.method === 'ai_assisted') {
+          alert(`✅ CPE 매칭 성공!\n방법: ${result.method}\nCPE: ${result.cpe_string}\n신뢰도: ${(result.confidence_score || 0 * 100).toFixed(1)}%`)
+        } else {
+          alert(`✅ CPE가 이미 존재합니다.\nCPE: ${result.cpe_string}`)
+        }
+        // 성공 시 컴포넌트 데이터 새로고침
+        window.location.reload()
+      } else {
+        // 수동 검토가 필요한 경우
+        if (result.needs_manual_review && result.candidates && result.candidates.length > 0) {
+          const shouldShowCandidates = confirm(
+            `🤔 자동 매칭이 어렵습니다.\n이유: ${result.reason}\n\nCPE 후보 목록을 확인하시겠습니까?`
+          )
+          
+          if (shouldShowCandidates) {
+            // CPE 후보 목록 표시 로직 (추후 모달로 구현)
+            let candidateList = `CPE 후보 목록 (총 ${result.candidates.length}개):\n\n`
+            result.candidates.slice(0, 5).forEach((candidate, index) => {
+              candidateList += `${index + 1}. ${candidate.title}\n`
+              candidateList += `   CPE: ${candidate.cpe_name}\n`
+              candidateList += `   매칭도: ${(candidate.match_score * 100).toFixed(1)}%\n\n`
+            })
+            
+            alert(candidateList)
+          }
+        } else {
+          alert(`❌ CPE 매칭 실패\n이유: ${result.message}`)
+        }
+      }
     } catch (error) {
       console.error('CPE matching failed:', error)
-      alert('CPE 매칭에 실패했습니다. 다시 시도해주세요.')
+      alert('❌ CPE 매칭 중 오류가 발생했습니다. 다시 시도해주세요.')
     } finally {
       setLoadingCPE(null)
     }

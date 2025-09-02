@@ -462,14 +462,12 @@ def generate_cpe_string(vendor: str, product: str, version: str) -> str:
     return f"cpe:2.3:a:{vendor_norm}:{product_norm}:{version_norm}:*:*:*:*:*:*:*"
 
 @router.post("/components/{component_id}/cpe-match")
-async def trigger_cpe_matching(component_id: int):
+async def trigger_cpe_matching(component_id: int, db_service: DatabaseService = Depends(get_db_service)):
     """
-    컴포넌트에 대한 CPE 매칭 수행
+    컴포넌트에 대한 향상된 CPE 매칭 수행 (NVD + AI)
     """
     try:
         if USE_DATABASE:
-            db_service = get_db_service()
-            
             # 컴포넌트 정보 조회
             query = """
                 SELECT component_id, vendor, product, version, cpe_full_string 
@@ -489,31 +487,57 @@ async def trigger_cpe_matching(component_id: int):
                     "success": True,
                     "message": "CPE already exists for this component",
                     "cpe_string": component[4],
-                    "timestamp": datetime.now().isoformat()
+                    "component_id": component_id,
+                    "timestamp": datetime.now().isoformat(),
+                    "method": "existing"
                 }
             
-            # CPE 문자열 생성
-            cpe_string = generate_cpe_string(
+            # 향상된 CPE 매칭 수행
+            from app.services.cpe_matching_service import get_cpe_matcher
+            cpe_matcher = get_cpe_matcher()
+            
+            matching_result = cpe_matcher.match_component_to_cpe(
                 vendor=component[1],  # vendor
                 product=component[2],  # product
                 version=component[3]   # version
             )
             
-            # 데이터베이스 업데이트
-            update_query = """
-                UPDATE asset_components 
-                SET cpe_full_string = %s, updated_at = NOW()
-                WHERE component_id = %s
-            """
-            db_service.execute_query(update_query, (cpe_string, component_id))
-            
-            return {
-                "success": True,
-                "message": "CPE matching completed successfully",
-                "component_id": component_id,
-                "cpe_string": cpe_string,
-                "timestamp": datetime.now().isoformat()
-            }
+            if matching_result["success"]:
+                # 성공적으로 매칭된 경우 데이터베이스 업데이트
+                cpe_string = matching_result["cpe_string"]
+                
+                update_query = """
+                    UPDATE asset_components 
+                    SET cpe_full_string = %s, updated_at = NOW()
+                    WHERE component_id = %s
+                """
+                db_service.execute_query(update_query, (cpe_string, component_id))
+                
+                return {
+                    "success": True,
+                    "message": matching_result["message"],
+                    "component_id": component_id,
+                    "cpe_string": cpe_string,
+                    "method": matching_result.get("method", "enhanced"),
+                    "confidence_score": matching_result.get("confidence_score"),
+                    "source": matching_result.get("source"),
+                    "ai_reasoning": matching_result.get("ai_reasoning"),
+                    "processing_time": matching_result.get("processing_time"),
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                # 매칭 실패 - 수동 검토 필요
+                return {
+                    "success": False,
+                    "message": matching_result["message"],
+                    "component_id": component_id,
+                    "method": matching_result.get("method", "failed"),
+                    "reason": matching_result.get("reason"),
+                    "candidates": matching_result.get("candidates", []),
+                    "needs_manual_review": matching_result.get("needs_manual_review", True),
+                    "processing_time": matching_result.get("processing_time"),
+                    "timestamp": datetime.now().isoformat()
+                }
         else:
             # Mock 응답 (데이터베이스 없을 경우)
             mock_cpe = f"cpe:2.3:a:example:component_{component_id}:1.0:*:*:*:*:*:*:*"
@@ -522,11 +546,136 @@ async def trigger_cpe_matching(component_id: int):
                 "message": "CPE matching completed (mock)",
                 "component_id": component_id,
                 "cpe_string": mock_cpe,
+                "method": "mock",
                 "timestamp": datetime.now().isoformat()
             }
             
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error in CPE matching: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"CPE matching failed: {str(e)}")
+        print(f"Error in enhanced CPE matching: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Enhanced CPE matching failed: {str(e)}")
+
+@router.get("/components/{component_id}/cpe-candidates")
+async def get_cpe_candidates(component_id: int, db_service: DatabaseService = Depends(get_db_service)):
+    """
+    컴포넌트에 대한 CPE 후보 목록 조회 (수동 선택용)
+    """
+    try:
+        if USE_DATABASE:
+            # 컴포넌트 정보 조회
+            query = """
+                SELECT component_id, vendor, product, version 
+                FROM asset_components 
+                WHERE component_id = %s
+            """
+            result = db_service.execute_query(query, (component_id,))
+            
+            if not result:
+                raise HTTPException(status_code=404, detail="Component not found")
+            
+            component = result[0]
+            
+            # CPE 후보 조회
+            from app.services.cpe_matching_service import get_cpe_matcher
+            cpe_matcher = get_cpe_matcher()
+            
+            candidates_result = cpe_matcher.get_cpe_candidates(
+                vendor=component[1],  # vendor
+                product=component[2],  # product
+                version=component[3]   # version
+            )
+            
+            return {
+                "success": candidates_result["success"],
+                "message": candidates_result["message"],
+                "component_id": component_id,
+                "component_info": {
+                    "vendor": component[1],
+                    "product": component[2],
+                    "version": component[3]
+                },
+                "candidates": candidates_result.get("candidates", []),
+                "total_results": candidates_result.get("total_results", 0),
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            # Mock 응답
+            return {
+                "success": True,
+                "message": "CPE candidates retrieved (mock)",
+                "component_id": component_id,
+                "candidates": [
+                    {
+                        "cpe_name": f"cpe:2.3:a:example:product_{component_id}:1.0:*:*:*:*:*:*:*",
+                        "title": f"Example Product {component_id}",
+                        "vendor": "example",
+                        "product": f"product_{component_id}",
+                        "version": "1.0",
+                        "match_score": 0.9,
+                        "deprecated": False
+                    }
+                ],
+                "total_results": 1,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting CPE candidates: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get CPE candidates: {str(e)}")
+
+@router.post("/components/{component_id}/cpe-select")
+async def select_cpe_manually(component_id: int, selected_cpe: str, db_service: DatabaseService = Depends(get_db_service)):
+    """
+    수동으로 선택된 CPE를 컴포넌트에 할당
+    """
+    try:
+        if USE_DATABASE:
+            # 컴포넌트 존재 확인
+            query = """
+                SELECT component_id FROM asset_components 
+                WHERE component_id = %s
+            """
+            result = db_service.execute_query(query, (component_id,))
+            
+            if not result:
+                raise HTTPException(status_code=404, detail="Component not found")
+            
+            # CPE 문자열 유효성 검사
+            if not selected_cpe.startswith("cpe:2.3:"):
+                raise HTTPException(status_code=400, detail="Invalid CPE format")
+            
+            # 데이터베이스 업데이트
+            update_query = """
+                UPDATE asset_components 
+                SET cpe_full_string = %s, updated_at = NOW()
+                WHERE component_id = %s
+            """
+            db_service.execute_query(update_query, (selected_cpe, component_id))
+            
+            return {
+                "success": True,
+                "message": "CPE manually assigned successfully",
+                "component_id": component_id,
+                "cpe_string": selected_cpe,
+                "method": "manual_selection",
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            # Mock 응답
+            return {
+                "success": True,
+                "message": "CPE manually assigned (mock)",
+                "component_id": component_id,
+                "cpe_string": selected_cpe,
+                "method": "manual_selection_mock",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in manual CPE selection: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Manual CPE selection failed: {str(e)}")
