@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import json
+import re
 from pathlib import Path
 
 # 데이터베이스 서비스 import
@@ -186,6 +187,11 @@ async def dashboard_stats(db_service: DatabaseService = Depends(get_db_service))
             "source": "mock_fallback",
             "error": str(e)
         }
+
+@router.get("/cve/dashboard-stats")
+async def cve_dashboard_stats(db_service: DatabaseService = Depends(get_db_service)):
+    """CVE 대시보드 통계 API - 프론트엔드 호환"""
+    return await dashboard_stats(db_service)
 
 @router.get("/cve/chart-data")
 async def chart_data(period: str = "week"):
@@ -432,3 +438,95 @@ async def analysis_trends(days: int = 30):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def generate_cpe_string(vendor: str, product: str, version: str) -> str:
+    """
+    Vendor, Product, Version 정보를 기반으로 CPE 문자열 생성
+    """
+    # CPE 2.3 형식으로 생성
+    # cpe:2.3:a:vendor:product:version:*:*:*:*:*:*:*
+    
+    def normalize_cpe_component(component: str) -> str:
+        """CPE 컴포넌트 정규화"""
+        if not component:
+            return "*"
+        # 소문자 변환, 공백 제거, 특수문자 처리
+        normalized = component.lower().strip()
+        normalized = re.sub(r'[^a-zA-Z0-9._-]', '_', normalized)
+        return normalized
+    
+    vendor_norm = normalize_cpe_component(vendor) if vendor else "*"
+    product_norm = normalize_cpe_component(product)
+    version_norm = normalize_cpe_component(version) if version else "*"
+    
+    return f"cpe:2.3:a:{vendor_norm}:{product_norm}:{version_norm}:*:*:*:*:*:*:*"
+
+@router.post("/components/{component_id}/cpe-match")
+async def trigger_cpe_matching(component_id: int):
+    """
+    컴포넌트에 대한 CPE 매칭 수행
+    """
+    try:
+        if USE_DATABASE:
+            db_service = get_db_service()
+            
+            # 컴포넌트 정보 조회
+            query = """
+                SELECT component_id, vendor, product, version, cpe_full_string 
+                FROM asset_components 
+                WHERE component_id = %s
+            """
+            result = db_service.execute_query(query, (component_id,))
+            
+            if not result:
+                raise HTTPException(status_code=404, detail="Component not found")
+            
+            component = result[0]
+            
+            # 이미 CPE가 있는 경우
+            if component[4]:  # cpe_full_string
+                return {
+                    "success": True,
+                    "message": "CPE already exists for this component",
+                    "cpe_string": component[4],
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # CPE 문자열 생성
+            cpe_string = generate_cpe_string(
+                vendor=component[1],  # vendor
+                product=component[2],  # product
+                version=component[3]   # version
+            )
+            
+            # 데이터베이스 업데이트
+            update_query = """
+                UPDATE asset_components 
+                SET cpe_full_string = %s, updated_at = NOW()
+                WHERE component_id = %s
+            """
+            db_service.execute_query(update_query, (cpe_string, component_id))
+            
+            return {
+                "success": True,
+                "message": "CPE matching completed successfully",
+                "component_id": component_id,
+                "cpe_string": cpe_string,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            # Mock 응답 (데이터베이스 없을 경우)
+            mock_cpe = f"cpe:2.3:a:example:component_{component_id}:1.0:*:*:*:*:*:*:*"
+            return {
+                "success": True,
+                "message": "CPE matching completed (mock)",
+                "component_id": component_id,
+                "cpe_string": mock_cpe,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in CPE matching: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"CPE matching failed: {str(e)}")

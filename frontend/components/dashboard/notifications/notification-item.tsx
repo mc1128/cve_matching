@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,17 @@ export default function NotificationItem({
   onMarkAsRead,
   onDelete,
 }: NotificationItemProps) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const formatTimestamp = (timestamp: string) => {
+    if (!isMounted) {
+      return 'Loading...'; // 서버 렌더링 시 일관된 값 반환
+    }
+
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -27,7 +37,12 @@ export default function NotificationItem({
     } else if (hours < 24) {
       return `${hours}h ago`;
     } else {
-      return date.toLocaleDateString();
+      // 일관된 형식 사용 (YYYY.MM.DD)
+      return date.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).replace(/\//g, '. ');
     }
   };
 

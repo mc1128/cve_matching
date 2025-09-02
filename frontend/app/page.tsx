@@ -11,9 +11,10 @@ import ProcessorIcon from "@/components/icons/proccesor"
 import BoomIcon from "@/components/icons/boom"
 import mockDataJson from "@/mock.json"
 import type { MockData } from "@/types/dashboard"
-import { useDashboardStats, useHealthCheck } from "@/hooks/use-api"
+import { useDashboardStats } from "@/hooks/use-api-query"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useState, useEffect } from "react"
 
 const mockData = mockDataJson as MockData
 
@@ -25,25 +26,53 @@ const iconMap = {
 }
 
 export default function DashboardOverview() {
-  const { data: statsData, loading: statsLoading, error: statsError } = useDashboardStats();
-  const { isHealthy, loading: healthLoading } = useHealthCheck();
+  const { data: statsData, isLoading: statsLoading, error: statsError } = useDashboardStats();
+  const [currentTime, setCurrentTime] = useState<string>('');
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Hydration 오류 방지: 클라이언트에서만 시간 업데이트
+  useEffect(() => {
+    setIsMounted(true);
+    const updateTime = () => {
+      setCurrentTime(new Date().toLocaleTimeString('ko-KR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      }));
+    };
+    
+    updateTime(); // 초기 시간 설정
+    const interval = setInterval(updateTime, 60000); // 1분마다 업데이트
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // API 연결 상태 확인
-  const useApiData = !healthLoading && isHealthy && !statsError;
-  const displayStats = useApiData && statsData ? statsData : mockData.dashboardStats;
+  const useApiData = !statsLoading && statsData && !statsError;
+  
+  // displayStats가 배열인지 확인하고 fallback 적용
+  let displayStats;
+  if (useApiData && Array.isArray(statsData)) {
+    displayStats = statsData;
+  } else {
+    displayStats = mockData.dashboardStats;
+  }
+
+  // 시간 표시 (Hydration 오류 방지)
+  const timeDisplay = isMounted ? `Last updated ${currentTime}` : 'Last updated';
+  const statusDisplay = useApiData ? '🟢 API Connected' : '🔴 Using Mock Data';
 
   return (
     <DashboardPageLayout
       header={{
         title: "CVE Security Center",
-        description: `Last updated ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} ${!healthLoading && isHealthy ? '🟢 API Connected' : '🔴 Using Mock Data'}`,
+        description: `${timeDisplay} ${statusDisplay}`,
         icon: BracketsIcon,
       }}
     >
       {statsError && (
         <Alert className="mb-6">
           <AlertDescription>
-            API 연결에 실패했습니다. Mock 데이터를 사용합니다: {statsError}
+            API 연결에 실패했습니다. Mock 데이터를 사용합니다: {statsError.message}
           </AlertDescription>
         </Alert>
       )}
