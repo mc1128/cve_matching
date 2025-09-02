@@ -218,3 +218,8 @@ out/
 
 # Docker
 .dockerignore
+
+# 민감한 환경 변수 파일들
+.env.local
+*.local
+*.secret
