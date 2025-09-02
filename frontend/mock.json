@@ -1,0 +1,222 @@
+{
+  "dashboardStats": [
+    {
+      "label": "TODAY'S NEW CVE",
+      "value": "23",
+      "description": "NEWLY DISCOVERED VULNERABILITIES",
+      "intent": "negative",
+      "icon": "gear",
+      "direction": "up"
+    },
+    {
+      "label": "ANALYSIS PENDING",
+      "value": "156",
+      "description": "AWAITING AI ANALYSIS",
+      "intent": "neutral",
+      "icon": "proccesor",
+      "tag": "HIGH PRIORITY"
+    },
+    {
+      "label": "CRITICAL ASSETS",
+      "value": "7",
+      "description": "CVSS 9.0+ VULNERABILITIES",
+      "intent": "negative",
+      "icon": "boom",
+      "direction": "up"
+    }
+  ],
+  "chartData": {
+    "week": [
+      {
+        "date": "06/07",
+        "critical": 5,
+        "high": 12,
+        "medium": 28
+      },
+      {
+        "date": "07/07",
+        "critical": 8,
+        "high": 15,
+        "medium": 32
+      },
+      {
+        "date": "08/07",
+        "critical": 3,
+        "high": 18,
+        "medium": 25
+      },
+      {
+        "date": "09/07",
+        "critical": 12,
+        "high": 22,
+        "medium": 35
+      },
+      {
+        "date": "10/07",
+        "critical": 6,
+        "high": 14,
+        "medium": 20
+      },
+      {
+        "date": "11/07",
+        "critical": 9,
+        "high": 19,
+        "medium": 28
+      },
+      {
+        "date": "12/07",
+        "critical": 15,
+        "high": 25,
+        "medium": 42
+      },
+      {
+        "date": "13/07",
+        "critical": 7,
+        "high": 16,
+        "medium": 24
+      }
+    ],
+    "month": [
+      { "date": "Jan", "critical": 45, "high": 180, "medium": 250 },
+      { "date": "Feb", "critical": 30, "high": 120, "medium": 200 },
+      { "date": "Mar", "critical": 65, "high": 280, "medium": 350 },
+      { "date": "Apr", "critical": 25, "high": 160, "medium": 180 },
+      { "date": "May", "critical": 80, "high": 350, "medium": 450 },
+      { "date": "Jun", "critical": 40, "high": 90, "medium": 250 },
+      { "date": "Jul", "critical": 70, "high": 220, "medium": 400 },
+      { "date": "Aug", "critical": 55, "high": 170, "medium": 300 },
+      { "date": "Sep", "critical": 60, "high": 200, "medium": 350 },
+      { "date": "Oct", "critical": 35, "high": 140, "medium": 220 },
+      { "date": "Nov", "critical": 75, "high": 340, "medium": 380 },
+      { "date": "Dec", "critical": 90, "high": 420, "medium": 500 }
+    ],
+    "year": [
+      {
+        "date": "2020",
+        "critical": 280,
+        "high": 580,
+        "medium": 1500
+      },
+      {
+        "date": "2021",
+        "critical": 320,
+        "high": 650,
+        "medium": 1800
+      },
+      {
+        "date": "2022",
+        "critical": 450,
+        "high": 950,
+        "medium": 2500
+      },
+      {
+        "date": "2023",
+        "critical": 200,
+        "high": 520,
+        "medium": 1200
+      },
+      { "date": "2024", "critical": 380, "high": 820, "medium": 2000 }
+    ]
+  },
+  "rebelsRanking": [
+    {
+      "id": 1,
+      "name": "CVE-2024-12345",
+      "handle": "CRITICAL",
+      "streak": "APACHE STRUTS RCE",
+      "points": 9.8,
+      "avatar": "/avatars/user_krimson.png",
+      "featured": true,
+      "subtitle": "REQUIRES IMMEDIATE ATTENTION"
+    },
+    {
+      "id": 2,
+      "name": "CVE-2024-11111",
+      "handle": "HIGH",
+      "streak": "NGINX BUFFER OVERFLOW",
+      "points": 8.5,
+      "avatar": "/avatars/user_mati.png"
+    },
+    {
+      "id": 3,
+      "name": "CVE-2024-22222",
+      "handle": "HIGH",
+      "streak": "MYSQL INJECTION",
+      "points": 8.2,
+      "avatar": "/avatars/user_pek.png"
+    },
+    {
+      "id": 4,
+      "name": "CVE-2024-33333",
+      "handle": "MEDIUM",
+      "streak": "REDIS AUTH BYPASS",
+      "points": 6.4,
+      "avatar": "/avatars/user_joyboy.png"
+    }
+  ],
+  "securityStatus": [
+    {
+      "title": "AI ANALYSIS",
+      "value": "87/156",
+      "status": "[PROCESSING...]",
+      "variant": "warning"
+    },
+    {
+      "title": "ASSET MATCHING",
+      "value": "99.2%",
+      "status": "[ACTIVE]",
+      "variant": "success"
+    },
+    {
+      "title": "WATCH LIST",
+      "value": "42",
+      "status": "[MONITORING]",
+      "variant": "success"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "notif-1",
+      "title": "CRITICAL CVE DETECTED",
+      "message": "CVE-2024-12345: Apache Struts RCE vulnerability affects 12 internal assets.",
+      "timestamp": "2024-07-10T13:39:00Z",
+      "type": "error",
+      "read": false,
+      "priority": "high"
+    },
+    {
+      "id": "notif-2",
+      "title": "AI ANALYSIS COMPLETE",
+      "message": "15 CVEs have been analyzed. 3 require immediate attention.",
+      "timestamp": "2024-07-10T13:35:00Z",
+      "type": "success",
+      "read": false,
+      "priority": "medium"
+    },
+    {
+      "id": "notif-3",
+      "title": "ASSET CPE MATCHED",
+      "message": "Successfully matched 8 new assets to CPE database.",
+      "timestamp": "2024-07-10T12:15:00Z",
+      "type": "info",
+      "read": true,
+      "priority": "low"
+    },
+    {
+      "id": "notif-4",
+      "title": "WEEKLY CVE REPORT",
+      "message": "82 new vulnerabilities discovered this week. 15 marked as critical.",
+      "timestamp": "2024-07-10T11:45:00Z",
+      "type": "warning",
+      "read": true,
+      "priority": "medium"
+    }
+  ],
+  "widgetData": {
+    "location": "Seoul, South Korea",
+    "timezone": "UTC+9",
+    "temperature": "22°C",
+    "weather": "Clear",
+    "date": "Wednesday, July 10th, 2025"
+  }
+}
