@@ -513,7 +513,7 @@ async def trigger_cpe_matching(component_id: int, db_service: DatabaseService = 
                 """
                 db_service.execute_query(update_query, (cpe_string, component_id))
                 
-                return {
+                result_data = {
                     "success": True,
                     "message": matching_result["message"],
                     "component_id": component_id,
@@ -525,9 +525,11 @@ async def trigger_cpe_matching(component_id: int, db_service: DatabaseService = 
                     "processing_time": matching_result.get("processing_time"),
                     "timestamp": datetime.now().isoformat()
                 }
+                
+                return result_data
             else:
                 # 매칭 실패 - 수동 검토 필요
-                return {
+                result_data = {
                     "success": False,
                     "message": matching_result["message"],
                     "component_id": component_id,
@@ -538,10 +540,12 @@ async def trigger_cpe_matching(component_id: int, db_service: DatabaseService = 
                     "processing_time": matching_result.get("processing_time"),
                     "timestamp": datetime.now().isoformat()
                 }
+                
+                return result_data
         else:
             # Mock 응답 (데이터베이스 없을 경우)
             mock_cpe = f"cpe:2.3:a:example:component_{component_id}:1.0:*:*:*:*:*:*:*"
-            return {
+            result_data = {
                 "success": True,
                 "message": "CPE matching completed (mock)",
                 "component_id": component_id,
@@ -549,6 +553,8 @@ async def trigger_cpe_matching(component_id: int, db_service: DatabaseService = 
                 "method": "mock",
                 "timestamp": datetime.now().isoformat()
             }
+            
+            return result_data
             
     except HTTPException:
         raise

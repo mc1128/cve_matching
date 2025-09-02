@@ -25,22 +25,41 @@ class EnhancedCPEMatcher:
         start_time = time.time()
         
         try:
-            logger.info(f"🔍 CPE 매칭 시작: {vendor} {product} {version}")
+            logger.info(f"🔍 CPE 매칭 시작")
+            logger.info(f"   - Vendor: {vendor}")
+            logger.info(f"   - Product: {product}")
+            logger.info(f"   - Version: {version}")
             
             # 1단계: NVD에서 CPE 검색
+            logger.info("📡 1단계: NVD CPE 검색 시작...")
             nvd_result = self.nvd_client.find_best_cpe_match(vendor, product, version)
             
+            logger.info(f"📊 NVD 검색 결과:")
+            logger.info(f"   - 성공: {nvd_result.success}")
+            logger.info(f"   - 메시지: {nvd_result.message}")
+            logger.info(f"   - 총 결과: {nvd_result.total_results}")
+            logger.info(f"   - 신뢰도: {nvd_result.confidence_score}")
+            
             if not nvd_result.success:
+                logger.warning("❌ NVD 검색 실패")
                 return {
                     "success": False,
                     "message": nvd_result.message,
                     "error": "NVD search failed",
-                    "processing_time": time.time() - start_time
+                    "processing_time": time.time() - start_time,
+                    "debug_info": {
+                        "vendor": vendor,
+                        "product": product,
+                        "version": version
+                    }
                 }
             
             # 2단계: 신뢰도에 따른 처리 분기
+            logger.info(f"🎯 2단계: 신뢰도 분석 (점수: {nvd_result.confidence_score})")
+            
             if nvd_result.confidence_score >= 0.8:
                 # 높은 신뢰도: 자동 매칭
+                logger.info("✅ 높은 신뢰도 - 자동 매칭 수행")
                 return {
                     "success": True,
                     "message": "High confidence automatic match",
@@ -60,7 +79,14 @@ class EnhancedCPEMatcher:
                     vendor, product, version, nvd_result.results
                 )
                 
+                logger.info(f"🎭 AI 분석 결과:")
+                logger.info(f"   - 성공: {ai_result.success}")
+                logger.info(f"   - 추천 CPE: {ai_result.recommended_cpe}")
+                logger.info(f"   - 신뢰도: {ai_result.confidence_score}")
+                logger.info(f"   - 수동검토 필요: {ai_result.should_manual_review}")
+                
                 if ai_result.success and not ai_result.should_manual_review:
+                    logger.info("✅ AI 분석 성공 - 자동 매칭")
                     return {
                         "success": True,
                         "message": "AI-assisted match",
@@ -74,6 +100,7 @@ class EnhancedCPEMatcher:
                     }
                 else:
                     # AI도 확신하지 못함 - 수동 검토 필요
+                    logger.warning("🤔 AI 분석 불확실 - 수동 검토 필요")
                     return {
                         "success": False,
                         "message": "Manual review required",
@@ -98,6 +125,7 @@ class EnhancedCPEMatcher:
             
             else:
                 # 낮은 신뢰도: 수동 검토 필요
+                logger.warning(f"⚠️ 낮은 신뢰도 - 수동 검토 필요 (점수: {nvd_result.confidence_score})")
                 return {
                     "success": False,
                     "message": "Low confidence - manual review required",
@@ -122,11 +150,18 @@ class EnhancedCPEMatcher:
                 
         except Exception as e:
             logger.error(f"❌ CPE 매칭 중 오류: {str(e)}")
+            import traceback
+            logger.error(f"상세 오류:\n{traceback.format_exc()}")
             return {
                 "success": False,
                 "message": f"CPE matching error: {str(e)}",
                 "error": str(e),
-                "processing_time": time.time() - start_time
+                "processing_time": time.time() - start_time,
+                "debug_info": {
+                    "vendor": vendor,
+                    "product": product,
+                    "version": version
+                }
             }
     
     def get_cpe_candidates(self, vendor: str, product: str, version: Optional[str] = None) -> Dict[str, Any]:

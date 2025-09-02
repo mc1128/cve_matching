@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Search,
   Plus,
@@ -52,48 +53,115 @@ import {
   usePrefetchData,
 } from "@/hooks/use-api-query"
 import { api } from "@/lib/api-client"
-import type { Device, AssetComponent } from "@/lib/api-client"
+import type { Device, AssetComponent, CPECandidate } from "@/lib/api-client"
+import { CPECandidateModal } from "@/components/dashboard/cpe-candidate-modal"
 
-function AssetComponents({ assetId }: { assetId: number }) {
-  const { data: components, isLoading, error } = useAssetComponents(assetId)
+function AssetComponents({ 
+  assetId, 
+  setCpeModalData, 
+  setCpeModalOpen 
+}: { 
+  assetId: number
+  setCpeModalData: React.Dispatch<React.SetStateAction<{
+    componentId: number
+    componentInfo: {
+      vendor: string | null
+      product: string
+      version: string | null
+    }
+    candidates: CPECandidate[]
+  } | null>>
+  setCpeModalOpen: React.Dispatch<React.SetStateAction<boolean>>
+}) {
+  const { data: components, isLoading, error, refetch } = useAssetComponents(assetId)
   const [loadingCPE, setLoadingCPE] = React.useState<number | null>(null)
+  const { refreshAssetComponents } = useRefreshData()
 
   // CPE 매칭 트리거 함수
   const handleCPEMatching = async (componentId: number) => {
     setLoadingCPE(componentId)
+    console.log(`🔥 CPE 매칭 시작 - Component ID: ${componentId}`)
+    
     try {
+      console.log(`📡 API 호출: /api/components/${componentId}/cpe-match`)
       const result = await api.triggerCPEMatching(componentId)
       
-      if (result.success) {
-        // 성공적으로 매칭된 경우
-        if (result.method === 'automatic' || result.method === 'ai_assisted') {
-          alert(`✅ CPE 매칭 성공!\n방법: ${result.method}\nCPE: ${result.cpe_string}\n신뢰도: ${(result.confidence_score || 0 * 100).toFixed(1)}%`)
-        } else {
-          alert(`✅ CPE가 이미 존재합니다.\nCPE: ${result.cpe_string}`)
-        }
-        // 성공 시 컴포넌트 데이터 새로고침
-        window.location.reload()
-      } else {
-        // 수동 검토가 필요한 경우
-        if (result.needs_manual_review && result.candidates && result.candidates.length > 0) {
-          const shouldShowCandidates = confirm(
-            `🤔 자동 매칭이 어렵습니다.\n이유: ${result.reason}\n\nCPE 후보 목록을 확인하시겠습니까?`
-          )
+      console.log(`📦 API 응답:`, result)
+      
+      // API 호출이 성공했는지 확인
+      if (result) {
+        const cpeResult = result
+        console.log(`🎯 CPE 매칭 결과:`, cpeResult)
+        console.log(`   - 성공여부: ${cpeResult.success}`)
+        console.log(`   - 메시지: ${cpeResult.message}`)
+        console.log(`   - 방법: ${cpeResult.method}`)
+        console.log(`   - 처리시간: ${cpeResult.processing_time}초`)
+        
+        if (cpeResult.success) {
+          // 성공적으로 매칭된 경우
+          console.log(`✅ CPE 매칭 성공!`)
+          console.log(`   - CPE: ${cpeResult.cpe_string}`)
+          console.log(`   - 신뢰도: ${cpeResult.confidence_score}`)
+          console.log(`   - 소스: ${cpeResult.source}`)
           
-          if (shouldShowCandidates) {
-            // CPE 후보 목록 표시 로직 (추후 모달로 구현)
-            let candidateList = `CPE 후보 목록 (총 ${result.candidates.length}개):\n\n`
-            result.candidates.slice(0, 5).forEach((candidate, index) => {
-              candidateList += `${index + 1}. ${candidate.title}\n`
-              candidateList += `   CPE: ${candidate.cpe_name}\n`
-              candidateList += `   매칭도: ${(candidate.match_score * 100).toFixed(1)}%\n\n`
-            })
-            
-            alert(candidateList)
+          if (cpeResult.method === 'automatic' || cpeResult.method === 'ai_assisted') {
+            alert(`✅ CPE 매칭 성공!\n방법: ${cpeResult.method}\nCPE: ${cpeResult.cpe_string}\n신뢰도: ${((cpeResult.confidence_score || 0) * 100).toFixed(1)}%`)
+          } else if (cpeResult.method === 'existing') {
+            alert(`✅ CPE가 이미 존재합니다.\nCPE: ${cpeResult.cpe_string}`)
+          } else {
+            alert(`✅ CPE 설정 완료!\n방법: ${cpeResult.method}\nCPE: ${cpeResult.cpe_string}`)
           }
+          // 성공 시 컴포넌트 데이터 실시간 새로고침 - 다중 방법 적용
+          console.log(`🔄 컴포넌트 데이터 새로고침...`)
+          
+          // 1. React Query 캐시 새로고침
+          refreshAssetComponents(assetId)
+          
+          // 2. 직접 refetch 호출
+          setTimeout(() => {
+            refetch()
+            console.log(`🔄 직접 refetch 완료`)
+          }, 500)
+          
+          // 3. 추가 안전장치 - 1초 후 한번 더
+          setTimeout(() => {
+            refreshAssetComponents(assetId)
+            console.log(`🔄 추가 새로고침 완료`)
+          }, 1000)
         } else {
-          alert(`❌ CPE 매칭 실패\n이유: ${result.message}`)
+          // 매칭 실패한 경우
+          console.log(`❌ CPE 매칭 실패`)
+          console.log(`   - 이유: ${cpeResult.reason || cpeResult.message}`)
+          console.log(`   - 수동검토 필요: ${cpeResult.needs_manual_review}`)
+          console.log(`   - 후보 개수: ${cpeResult.candidates?.length || 0}`)
+          
+          // 수동 검토가 필요한 경우
+          if (cpeResult.needs_manual_review && cpeResult.candidates && cpeResult.candidates.length > 0) {
+            console.log(`🤔 후보 목록:`, cpeResult.candidates)
+            
+            // 컴포넌트 정보 찾기
+            const component = components?.find(c => c.component_id === componentId)
+            if (component) {
+              setCpeModalData({
+                componentId,
+                componentInfo: {
+                  vendor: component.vendor,
+                  product: component.product,
+                  version: component.version
+                },
+                candidates: cpeResult.candidates
+              })
+              setCpeModalOpen(true)
+            } else {
+              alert(`❌ 컴포넌트 정보를 찾을 수 없습니다.`)
+            }
+          } else {
+            alert(`❌ CPE 매칭 실패\n이유: ${cpeResult.message}\n\n자세한 내용은 개발자 도구 콘솔을 확인해주세요.`)
+          }
         }
+      } else {
+        console.error(`❌ API 응답이 비어있음:`, result)
+        alert('❌ API 응답이 올바르지 않습니다.\n개발자 도구 콘솔을 확인해주세요.')
       }
     } catch (error) {
       console.error('CPE matching failed:', error)
@@ -413,10 +481,35 @@ export default function DevicesPage() {
   const [selectedAssetType, setSelectedAssetType] = useState("all")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [expandedAssets, setExpandedAssets] = useState<Set<number>>(new Set())
+  
+  // CPE 후보 모달 상태 - 메인 컴포넌트로 이동
+  const [cpeModalOpen, setCpeModalOpen] = React.useState(false)
+  const [cpeModalData, setCpeModalData] = React.useState<{
+    componentId: number
+    componentInfo: {
+      vendor: string | null
+      product: string
+      version: string | null
+    }
+    candidates: CPECandidate[]
+  } | null>(null)
 
   const { data: assets, isLoading, error, refetch } = useDevices()
-  const { refreshDevices } = useRefreshData()
+  const { refreshDevices, refreshAssetComponents } = useRefreshData()
   const { prefetchAssetComponents, prefetchMultipleAssetComponents } = usePrefetchData()
+
+  // CPE 선택 완료 후 처리 함수
+  const handleCPESelected = () => {
+    if (cpeModalData) {
+      // 해당 컴포넌트가 속한 자산 ID를 찾아서 새로고침
+      const expandedAssetIds = Array.from(expandedAssets)
+      expandedAssetIds.forEach(assetId => {
+        refreshAssetComponents(assetId)
+      })
+    }
+    setCpeModalOpen(false)
+    setCpeModalData(null)
+  }
 
   const filteredAssets =
     assets?.filter((asset) => {
@@ -756,7 +849,11 @@ export default function DevicesPage() {
                               </TableRow>
                             }
                           >
-                            <AssetComponents assetId={asset.asset_id} />
+                            <AssetComponents 
+                              assetId={asset.asset_id} 
+                              setCpeModalData={setCpeModalData}
+                              setCpeModalOpen={setCpeModalOpen}
+                            />
                           </React.Suspense>
                         )}
                       </React.Fragment>
@@ -767,6 +864,18 @@ export default function DevicesPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* CPE 후보 선택 모달 */}
+      {cpeModalData && (
+        <CPECandidateModal
+          isOpen={cpeModalOpen}
+          onClose={() => setCpeModalOpen(false)}
+          componentId={cpeModalData.componentId}
+          componentInfo={cpeModalData.componentInfo}
+          candidates={cpeModalData.candidates}
+          onCPESelected={handleCPESelected}
+        />
+      )}
     </DashboardPageLayout>
   )
 }

@@ -44,14 +44,14 @@ export function useAssetComponents(assetId: number | null) {
     },
     // assetId가 null이면 쿼리 비활성화
     enabled: assetId !== null,
-    // 자산 구성요소는 변경이 적으므로 더 오래 캐시
-    staleTime: 15 * 60 * 1000, // 15분으로 증가
-    gcTime: 2 * 60 * 60 * 1000, // 2시간으로 증가
-    // 백그라운드에서 리패치하지 않음 (더 빠른 응답)
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    // 캐시된 데이터가 있으면 즉시 반환
-    placeholderData: (previousData) => previousData,
+    // 컴포넌트는 자주 변경될 수 있으므로 짧은 캐시로 변경
+    staleTime: 0, // 즉시 stale로 처리하여 새로고침 우선
+    gcTime: 5 * 60 * 1000, // 5분으로 단축
+    // 백그라운드에서 리패치 활성화
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    // 캐시된 데이터 즉시 반환하지 않고 새로운 데이터 우선
+    // placeholderData 제거
   });
 }
 
@@ -98,7 +98,14 @@ export function useRefreshData() {
   };
 
   const refreshAssetComponents = (assetId: number) => {
+    // 1. 기존 캐시 삭제
+    queryClient.removeQueries({ queryKey: queryKeys.assetComponents(assetId) });
+    
+    // 2. 쿼리 무효화
     queryClient.invalidateQueries({ queryKey: queryKeys.assetComponents(assetId) });
+    
+    // 3. 강제 refetch
+    queryClient.refetchQueries({ queryKey: queryKeys.assetComponents(assetId) });
   };
 
   const refreshDashboardStats = () => {

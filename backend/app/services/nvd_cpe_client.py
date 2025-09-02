@@ -77,17 +77,30 @@ class NVDCPEClient:
             headers["apiKey"] = self.api_key
         
         try:
-            logger.info(f"NVD API 요청: {url} with params: {params}")
+            logger.info(f"🔍 NVD API 요청: {url}")
+            logger.info(f"📋 파라미터: {params}")
+            
             response = requests.get(url, headers=headers, params=params, timeout=30)
+            
+            logger.info(f"📊 응답 상태: {response.status_code}")
+            
+            if response.status_code == 404:
+                logger.warning(f"⚠️ NVD API 404: 검색어 '{params.get('keywordSearch', '')}' 에 대한 CPE를 찾을 수 없습니다")
+                return {"products": []}  # 빈 결과 반환
+            
             response.raise_for_status()
             
-            return response.json()
+            data = response.json()
+            logger.info(f"✅ NVD API 성공: {data.get('totalResults', 0)}개 결과")
+            return data
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"NVD API 요청 실패: {str(e)}")
+            logger.error(f"❌ NVD API 요청 실패: {str(e)}")
+            logger.error(f"   URL: {url}")
+            logger.error(f"   파라미터: {params}")
             return None
         except json.JSONDecodeError as e:
-            logger.error(f"JSON 파싱 실패: {str(e)}")
+            logger.error(f"❌ JSON 파싱 실패: {str(e)}")
             return None
     
     def search_cpe_by_keyword(self, keyword: str, results_per_page: int = 20) -> List[CPESearchResult]:
@@ -128,18 +141,76 @@ class NVDCPEClient:
         return results
     
     def search_cpe_by_vendor_product(self, vendor: str, product: str, version: Optional[str] = None) -> List[CPESearchResult]:
-        """Vendor와 Product로 정확한 CPE 검색"""
-        # 복합 검색어 생성
+        """Vendor와 Product로 정확한 CPE 검색 - 다단계 fallback 전략"""
+        
+        # 1차 시도: 전체 검색어
         keywords = []
-        if vendor:
+        
+        # vendor와 product가 같거나 중복되는 경우 처리
+        if vendor and product:
+            vendor_clean = vendor.lower().strip()
+            product_clean = product.lower().strip()
+            
+            # 중복 제거: vendor가 product에 포함되거나 그 반대인 경우
+            if vendor_clean in product_clean:
+                keywords.append(product)
+            elif product_clean in vendor_clean:
+                keywords.append(vendor)
+            else:
+                keywords.append(vendor)
+                keywords.append(product)
+        elif vendor:
             keywords.append(vendor)
-        if product:
+        elif product:
             keywords.append(product)
-        if version:
+        
+        # 버전 정보는 선택적으로 추가 (너무 구체적이면 검색 실패 가능성 증가)
+        if version and len(keywords) <= 2:  # 키워드가 적을 때만 버전 추가
             keywords.append(version)
         
+        # 검색어가 없으면 실패
+        if not keywords:
+            logger.warning("⚠️ 검색어가 없습니다")
+            return []
+        
+        # 1차 시도: 전체 검색어
         keyword = " ".join(keywords)
-        return self.search_cpe_by_keyword(keyword)
+        logger.info(f"🔍 1차 검색어: '{keyword}'")
+        
+        results = self.search_cpe_by_keyword(keyword)
+        if results:
+            logger.info(f"✅ 1차 검색 성공: {len(results)}개 결과")
+            return results
+        
+        # 2차 시도: 버전 제거하고 검색
+        if version and len(keywords) > 2:
+            fallback_keywords = [k for k in keywords if k != version]
+            keyword = " ".join(fallback_keywords)
+            logger.info(f"🔍 2차 검색어 (버전 제외): '{keyword}'")
+            
+            results = self.search_cpe_by_keyword(keyword)
+            if results:
+                logger.info(f"✅ 2차 검색 성공: {len(results)}개 결과")
+                return results
+        
+        # 3차 시도: vendor 또는 product만으로 검색
+        if vendor and product and len(keywords) > 1:
+            # vendor 우선 시도
+            logger.info(f"🔍 3차 검색어 (vendor만): '{vendor}'")
+            results = self.search_cpe_by_keyword(vendor)
+            if results:
+                logger.info(f"✅ 3차 검색 성공 (vendor): {len(results)}개 결과")
+                return results
+            
+            # product로 시도
+            logger.info(f"🔍 4차 검색어 (product만): '{product}'")
+            results = self.search_cpe_by_keyword(product)
+            if results:
+                logger.info(f"✅ 4차 검색 성공 (product): {len(results)}개 결과")
+                return results
+        
+        logger.warning(f"❌ 모든 검색 시도 실패: vendor='{vendor}', product='{product}', version='{version}'")
+        return []
     
     def _parse_cpe_name(self, cpe_name: str) -> Dict[str, Optional[str]]:
         """CPE 이름을 파싱하여 vendor, product, version 추출"""

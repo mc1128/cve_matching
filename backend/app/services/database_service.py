@@ -313,7 +313,68 @@ class DatabaseService:
                 "critical_cves": 0,
                 "pending_analysis": 0
             }
-
+    
+    def execute_query(self, query: str, params: tuple = None) -> List[tuple]:
+        """SQL 쿼리 실행 - CPE 매칭에서 사용"""
+        db = None
+        try:
+            db = self.get_session()
+            
+            if params:
+                # 튜플 파라미터를 딕셔너리로 변환
+                param_dict = {}
+                modified_query = query
+                
+                # %s를 :param0, :param1, ... 로 변경
+                param_index = 0
+                while '%s' in modified_query and param_index < len(params):
+                    param_name = f"param{param_index}"
+                    param_dict[param_name] = params[param_index]
+                    modified_query = modified_query.replace('%s', f":{param_name}", 1)
+                    param_index += 1
+                
+                logger.info(f"🔍 Original Query: {query}")
+                logger.info(f"� Modified Query: {modified_query}")
+                logger.info(f"📋 Parameters: {param_dict}")
+                
+                # 쿼리 실행
+                result = db.execute(text(modified_query), param_dict)
+                
+                # DML 쿼리인 경우 커밋하고 빈 리스트 반환
+                if modified_query.strip().upper().startswith(('UPDATE', 'INSERT', 'DELETE')):
+                    db.commit()
+                    logger.info("✅ DML 쿼리 실행 완료")
+                    return []
+                else:
+                    # SELECT 쿼리인 경우 결과 반환
+                    rows = result.fetchall()
+                    logger.info(f"✅ SELECT 쿼리 실행 완료 - {len(rows)}개 결과")
+                    return rows
+            else:
+                # 파라미터가 없는 경우
+                logger.info(f"🔍 Query without params: {query}")
+                result = db.execute(text(query))
+                
+                if query.strip().upper().startswith(('UPDATE', 'INSERT', 'DELETE')):
+                    db.commit()
+                    logger.info("✅ DML 쿼리 실행 완료")
+                    return []
+                else:
+                    rows = result.fetchall()
+                    logger.info(f"✅ SELECT 쿼리 실행 완료 - {len(rows)}개 결과")
+                    return rows
+            
+        except Exception as e:
+            logger.error(f"❌ Database error: {str(e)}")
+            logger.error(f"   Query: {query}")
+            logger.error(f"   Params: {params}")
+            if db:
+                db.rollback()
+                logger.error("🔄 Transaction rolled back")
+            return []
+        finally:
+            if db:
+                db.close()
 # 싱글톤 인스턴스 - 애플리케이션 전체에서 하나만 사용
 _db_service_instance = None
 
