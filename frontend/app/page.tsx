@@ -14,6 +14,8 @@ import type { MockData } from "@/types/dashboard"
 import { useDashboardStats } from "@/hooks/use-api-query"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { LoginPrompt } from "@/components/auth/login-prompt"
+import { useAuth } from "@/lib/auth-context"
 import { useState, useEffect } from "react"
 
 const mockData = mockDataJson as MockData
@@ -28,6 +30,7 @@ const iconMap = {
 export default function DashboardOverview() {
   const { data: statsData, isLoading: statsLoading, error: statsError } = useDashboardStats();
   const [currentTime, setCurrentTime] = useState<string>('');
+  const { isAuthenticated } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
 
   // Hydration 오류 방지: 클라이언트에서만 시간 업데이트

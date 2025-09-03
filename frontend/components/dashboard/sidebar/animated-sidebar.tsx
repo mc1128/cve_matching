@@ -1,7 +1,8 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { PanelLeftClose, PanelLeftOpen, User, Shield, LogOut } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
@@ -11,8 +12,9 @@ import CuteRobotIcon from "@/components/icons/cute-robot"
 import GearIcon from "@/components/icons/gear"
 import LockIcon from "@/components/icons/lock"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Button } from "@/components/ui/button"
 import DotsVerticalIcon from "@/components/icons/dots-vertical"
-import { useEffect, useRef } from "react"
+import { useAuth } from "@/lib/auth-context"
 
 const data = {
   navMain: [
@@ -61,6 +63,24 @@ interface AnimatedSidebarProps {
 
 export function AnimatedSidebar({ collapsed, setCollapsed }: AnimatedSidebarProps) {
   const sidebarRef = useRef<HTMLElement>(null)
+  const { user, isAuthenticated, logout } = useAuth()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return
+    
+    if (confirm("정말 로그아웃하시겠습니까?")) {
+      setIsLoggingOut(true)
+      try {
+        await logout()
+      } catch (error) {
+        console.error("Logout error:", error)
+        alert("로그아웃 중 오류가 발생했습니다.")
+      } finally {
+        setIsLoggingOut(false)
+      }
+    }
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -118,8 +138,12 @@ export function AnimatedSidebar({ collapsed, setCollapsed }: AnimatedSidebarProp
 
         <div className="mt-auto mb-6 flex justify-center">
           <div className="rounded-xl p-2">
-            <div className="size-8 rounded-full overflow-hidden border-2 border-border">
-              <Image src={data.user.avatar || "/placeholder.svg"} alt={data.user.name} width={32} height={32} />
+            <div className="size-8 rounded-full overflow-hidden border-2 border-border bg-muted flex items-center justify-center">
+              {isAuthenticated && user ? (
+                <User className="h-4 w-4" />
+              ) : (
+                <Shield className="h-4 w-4" />
+              )}
             </div>
           </div>
         </div>
@@ -179,27 +203,51 @@ export function AnimatedSidebar({ collapsed, setCollapsed }: AnimatedSidebarProp
 
       <div className="border-t border-border px-4 py-4">
         <div className="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">USER</div>
-        <Popover>
-          <PopoverTrigger className="flex gap-3 w-full group cursor-pointer rounded-lg p-2 hover:bg-accent transition-colors">
-            <div className="shrink-0 flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground overflow-clip border-2 border-border">
-              <Image src={data.user.avatar || "/placeholder.svg"} alt={data.user.name} width={40} height={40} />
+        {isAuthenticated && user ? (
+          <Popover>
+            <PopoverTrigger className="flex gap-3 w-full group cursor-pointer rounded-lg p-2 hover:bg-accent transition-colors">
+              <div className="shrink-0 flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground overflow-clip border-2 border-border">
+                <User className="h-6 w-6" />
+              </div>
+              <div className="flex-1 text-left">
+                <div className="text-sm font-medium text-foreground">{user.user_name}</div>
+                <div className="text-xs text-muted-foreground">{user.email}</div>
+              </div>
+              <DotsVerticalIcon className="ml-auto size-4 text-muted-foreground" />
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-0" side="top" align="end" sideOffset={4}>
+              <div className="flex flex-col">
+                <div className="px-4 py-3 border-b">
+                  <p className="text-sm font-medium">{user.user_name}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                  {user.department && (
+                    <p className="text-xs text-muted-foreground">{user.department}</p>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start px-4 py-2 h-auto rounded-none"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {isLoggingOut ? "로그아웃 중..." : "로그아웃"}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <div className="flex gap-3 w-full rounded-lg p-2 bg-muted/50">
+            <div className="shrink-0 flex size-10 items-center justify-center rounded-lg bg-muted border-2 border-border">
+              <Shield className="h-6 w-6" />
             </div>
             <div className="flex-1 text-left">
-              <div className="text-sm font-medium text-foreground">{data.user.name}</div>
-              <div className="text-xs text-muted-foreground">{data.user.email}</div>
+              <div className="text-sm font-medium text-foreground">Guest</div>
+              <div className="text-xs text-muted-foreground">Not logged in</div>
             </div>
-            <DotsVerticalIcon className="ml-auto size-4 text-muted-foreground" />
-          </PopoverTrigger>
-          <PopoverContent className="w-56 p-0" side="top" align="end" sideOffset={4}>
-            <div className="flex flex-col">
-              <button className="flex items-center px-4 py-2 text-sm hover:bg-accent transition-colors">Account</button>
-              <button className="flex items-center px-4 py-2 text-sm hover:bg-accent transition-colors">
-                <GearIcon className="mr-2 h-4 w-4" />
-                Settings
-              </button>
-            </div>
-          </PopoverContent>
-        </Popover>
+          </div>
+        )}
       </div>
     </motion.aside>
   )

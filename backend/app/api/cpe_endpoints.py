@@ -16,6 +16,7 @@ try:
     import os
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
     from app.services.database_service import get_db_service, DatabaseService
+    from app.services.cache_service import invalidate_component_cache, get_cache_info, cache
     USE_DATABASE = True
     print("✅ Database service imported successfully")
 except ImportError as e:
@@ -513,6 +514,10 @@ async def trigger_cpe_matching(component_id: int, db_service: DatabaseService = 
                 """
                 db_service.execute_query(update_query, (cpe_string, component_id))
                 
+                # 🔥 CPE 매칭 성공 후 관련 캐시 무효화
+                from app.services.cache_service import invalidate_component_cache
+                invalidate_component_cache(component_id)
+                
                 result_data = {
                     "success": True,
                     "message": matching_result["message"],
@@ -523,7 +528,8 @@ async def trigger_cpe_matching(component_id: int, db_service: DatabaseService = 
                     "source": matching_result.get("source"),
                     "ai_reasoning": matching_result.get("ai_reasoning"),
                     "processing_time": matching_result.get("processing_time"),
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "cache_invalidated": True  # 캐시 무효화 완료 표시
                 }
                 
                 return result_data
@@ -661,13 +667,18 @@ async def select_cpe_manually(component_id: int, selected_cpe: str, db_service: 
             """
             db_service.execute_query(update_query, (selected_cpe, component_id))
             
+            # 🔥 수동 CPE 선택 후 관련 캐시 무효화
+            from app.services.cache_service import invalidate_component_cache
+            invalidate_component_cache(component_id)
+            
             return {
                 "success": True,
                 "message": "CPE manually assigned successfully",
                 "component_id": component_id,
                 "cpe_string": selected_cpe,
                 "method": "manual_selection",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "cache_invalidated": True  # 캐시 무효화 완료 표시
             }
         else:
             # Mock 응답
@@ -685,3 +696,53 @@ async def select_cpe_manually(component_id: int, selected_cpe: str, db_service: 
     except Exception as e:
         print(f"Error in manual CPE selection: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Manual CPE selection failed: {str(e)}")
+
+# 🔥 캐시 관리 API 엔드포인트들
+@router.get("/cache/info")
+async def get_cache_status():
+    """캐시 상태 정보 조회"""
+    try:
+        cache_info = get_cache_info()
+        return {
+            "success": True,
+            "cache_info": cache_info,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cache info retrieval failed: {str(e)}")
+
+@router.post("/cache/clear")
+async def clear_all_cache():
+    """전체 캐시 클리어"""
+    try:
+        cache.clear()
+        return {
+            "success": True,
+            "message": "All cache cleared successfully",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cache clear failed: {str(e)}")
+
+@router.post("/cache/clear/components")
+async def clear_components_cache():
+    """컴포넌트 관련 캐시만 클리어"""
+    try:
+        # asset_components와 assets 관련 캐시 클리어
+        component_count = cache.clear_pattern("asset_components")
+        asset_count = cache.clear_pattern("assets")
+        
+        total_cleared = component_count + asset_count
+        
+        return {
+            "success": True,
+            "message": f"Component cache cleared: {total_cleared} keys removed",
+            "details": {
+                "component_cache_keys": component_count,
+                "asset_cache_keys": asset_count,
+                "total_cleared": total_cleared
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Component cache clear failed: {str(e)}")

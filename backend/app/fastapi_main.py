@@ -20,6 +20,7 @@ print(f"🔍 DB_HOST: {os.getenv('DB_HOST', 'NOT_FOUND')}")
 
 # API 라우터 import
 from app.api.cpe_endpoints import router as cve_router
+from app.api.auth_endpoints import router as auth_router
 
 # App 설정
 app = FastAPI(
@@ -46,6 +47,7 @@ app.add_middleware(
 
 # API 라우터 등록
 app.include_router(cve_router)
+app.include_router(auth_router)
 
 @app.get("/")
 async def root():

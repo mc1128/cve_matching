@@ -15,6 +15,7 @@ import OverlayChat from "@/components/chat/overlay-chat"
 import { CVEProvider } from "@/lib/cve-context"
 import CVEDetail from "@/components/dashboard/cve-detail"
 import { AssetProvider } from "@/lib/asset-context"
+import { AuthProvider } from "@/lib/auth-context"
 import { usePathname } from "next/navigation"
 import { AnimatedSidebar } from "@/components/dashboard/sidebar/animated-sidebar"
 import QueryProvider from "@/providers/query-provider"
@@ -64,62 +65,63 @@ export default function ClientLayout({
   return (
     <QueryProvider>
       <V0Provider isV0={isV0}>
-        <CVEProvider>
-          <AssetProvider>
-            <SidebarProvider>
-              <MobileHeader mockData={mockData} />
+        <AuthProvider>
+          <CVEProvider>
+            <AssetProvider>
+              <SidebarProvider>
+                <MobileHeader mockData={mockData} />
 
-              <div className="relative min-h-screen bg-background">
-                <div className="fixed left-0 top-0 h-full z-40 hidden lg:block">
-                  <AnimatedSidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
-                </div>
+                <div className="relative min-h-screen bg-background">
+                  <div className="fixed left-0 top-0 h-full z-40 hidden lg:block">
+                    <AnimatedSidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
+                  </div>
 
-                <div
-                  className={`transition-all duration-300 ease-in-out ${sidebarCollapsed ? "lg:ml-16" : "lg:ml-[213px]"}`}
-                >
-                  <div className={`min-h-screen ${shouldShowSidebar ? "lg:pr-4" : ""}`}>
-                    <div
-                      className={`grid grid-cols-1 ${
-                        !shouldShowSidebar 
-                          ? "lg:grid-cols-1" 
-                          : shouldUseWideLayout 
+                  <div
+                    className={`transition-all duration-300 ease-in-out ${sidebarCollapsed ? "lg:ml-16" : "lg:ml-[213px]"}`}
+                  >
+                    <div className={`min-h-screen ${shouldShowSidebar ? "lg:pr-4" : ""}`}>
+                      <div
+                        className={`grid grid-cols-1 ${
+                          !shouldShowSidebar 
                             ? "lg:grid-cols-1" 
-                            : "lg:grid-cols-4"
-                      } ${shouldShowSidebar ? "gap-4" : ""}`}
-                    >
-                      <div className={
-                        !shouldShowSidebar 
-                          ? "col-span-1" 
-                          : shouldUseWideLayout 
+                            : shouldUseWideLayout 
+                              ? "lg:grid-cols-1" 
+                              : "lg:grid-cols-4"
+                        } ${shouldShowSidebar ? "gap-4" : ""}`}
+                      >
+                        <div className={
+                          !shouldShowSidebar 
                             ? "col-span-1" 
-                            : "col-span-3"
-                      }>
-                        {children}
-                      </div>
+                            : shouldUseWideLayout 
+                              ? "col-span-1" 
+                              : "col-span-3"
+                        }>
+                          {children}
+                        </div>
 
-                      {shouldShowSidebar && !shouldUseWideLayout && (
-                        <div className="col-span-1 hidden lg:block">
-                          <RightSidebar mockData={mockData} />
+                        {shouldShowSidebar && !shouldUseWideLayout && (
+                          <div className="col-span-1 hidden lg:block">
+                            <RightSidebar mockData={mockData} />
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Devices 페이지용 오버레이 채팅창 */}
+                      {shouldUseWideLayout && (
+                        <div className="fixed bottom-0 right-6 z-50 w-96 bg-background/95 backdrop-blur-sm rounded-t-xl shadow-2xl overflow-hidden">
+                          <OverlayChat />
+                        </div>
+                      )}
+                      
+                      {/* Security 페이지용 오버레이 채팅창 */}
+                      {isCVEManagementPage && (
+                        <div className="fixed bottom-0 right-6 z-50 w-96 bg-background/95 backdrop-blur-sm rounded-t-xl shadow-2xl overflow-hidden">
+                          <OverlayChat />
                         </div>
                       )}
                     </div>
-                    
-                    {/* Devices 페이지용 오버레이 채팅창 */}
-                    {shouldUseWideLayout && (
-                      <div className="fixed bottom-0 right-6 z-50 w-96 bg-background/95 backdrop-blur-sm rounded-t-xl shadow-2xl overflow-hidden">
-                        <OverlayChat />
-                      </div>
-                    )}
-                    
-                    {/* Security 페이지용 오버레이 채팅창 */}
-                    {isCVEManagementPage && (
-                      <div className="fixed bottom-0 right-6 z-50 w-96 bg-background/95 backdrop-blur-sm rounded-t-xl shadow-2xl overflow-hidden">
-                        <OverlayChat />
-                      </div>
-                    )}
                   </div>
                 </div>
-              </div>
 
               {isCVEManagementPage && <CVEDetail />}
 
@@ -127,6 +129,7 @@ export default function ClientLayout({
             </SidebarProvider>
           </AssetProvider>
         </CVEProvider>
+        </AuthProvider>
       </V0Provider>
     </QueryProvider>
   )

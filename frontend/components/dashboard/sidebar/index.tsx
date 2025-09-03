@@ -1,6 +1,7 @@
 "use client"
 
 import type * as React from "react"
+import { useState } from "react"
 import Link from "next/link"
 
 import {
@@ -18,6 +19,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import BracketsIcon from "@/components/icons/brackets"
 import ProcessorIcon from "@/components/icons/proccesor"
@@ -28,7 +30,10 @@ import DotsVerticalIcon from "@/components/icons/dots-vertical"
 import { Bullet } from "@/components/ui/bullet"
 import LockIcon from "@/components/icons/lock"
 import Image from "next/image"
+import { useAuth } from "@/lib/auth-context"
+import { LogOut, User, Shield } from "lucide-react"
 import { useIsV0 } from "@/lib/v0-context"
+import { useState } from "react"
 
 // This is sample data for the sidebar
 const data = {
@@ -77,6 +82,24 @@ const data = {
 
 export function DashboardSidebar({ className, ...props }: React.ComponentProps<typeof Sidebar>) {
   const isV0 = useIsV0()
+  const { user, isAuthenticated, logout } = useAuth()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return
+    
+    if (confirm("정말 로그아웃하시겠습니까?")) {
+      setIsLoggingOut(true)
+      try {
+        await logout()
+      } catch (error) {
+        console.error("Logout error:", error)
+        alert("로그아웃 중 오류가 발생했습니다.")
+      } finally {
+        setIsLoggingOut(false)
+      }
+    }
+  }
 
   return (
     <Sidebar {...props} className={cn("py-sides", className)}>
@@ -147,39 +170,59 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <Popover>
-                  <PopoverTrigger className="flex gap-0.5 w-full group cursor-pointer">
+                {isAuthenticated && user ? (
+                  <Popover>
+                    <PopoverTrigger className="flex gap-0.5 w-full group cursor-pointer">
+                      <div className="shrink-0 flex size-14 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground overflow-clip">
+                        <User className="h-8 w-8" />
+                      </div>
+                      <div className="group/item pl-3 pr-1.5 pt-2 pb-1.5 flex-1 flex bg-sidebar-accent hover:bg-sidebar-accent-active/75 items-center rounded group-data-[state=open]:bg-sidebar-accent-active group-data-[state=open]:hover:bg-sidebar-accent-active group-data-[state=open]:text-sidebar-accent-foreground">
+                        <div className="grid flex-1 text-left text-sm leading-tight">
+                          <span className="truncate text-xl font-display">{user.user_name}</span>
+                          <span className="truncate text-xs uppercase opacity-50 group-hover/item:opacity-100">
+                            {user.email}
+                          </span>
+                        </div>
+                        <DotsVerticalIcon className="ml-auto size-4" />
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-0" side="bottom" align="end" sideOffset={4}>
+                      <div className="flex flex-col">
+                        <div className="px-4 py-3 border-b">
+                          <p className="text-sm font-medium">{user.user_name}</p>
+                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                          {user.department && (
+                            <p className="text-xs text-muted-foreground">{user.department}</p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start px-4 py-2 h-auto rounded-none"
+                          onClick={handleLogout}
+                          disabled={isLoggingOut}
+                        >
+                          <LogOut className="mr-2 h-4 w-4" />
+                          {isLoggingOut ? "로그아웃 중..." : "로그아웃"}
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <div className="flex gap-0.5 w-full">
                     <div className="shrink-0 flex size-14 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground overflow-clip">
-                      <Image
-                        src={data.user.avatar || "/placeholder.svg"}
-                        alt={data.user.name}
-                        width={120}
-                        height={120}
-                      />
+                      <Shield className="h-8 w-8" />
                     </div>
-                    <div className="group/item pl-3 pr-1.5 pt-2 pb-1.5 flex-1 flex bg-sidebar-accent hover:bg-sidebar-accent-active/75 items-center rounded group-data-[state=open]:bg-sidebar-accent-active group-data-[state=open]:hover:bg-sidebar-accent-active group-data-[state=open]:text-sidebar-accent-foreground">
+                    <div className="pl-3 pr-1.5 pt-2 pb-1.5 flex-1 flex bg-sidebar-accent items-center rounded">
                       <div className="grid flex-1 text-left text-sm leading-tight">
-                        <span className="truncate text-xl font-display">{data.user.name}</span>
-                        <span className="truncate text-xs uppercase opacity-50 group-hover/item:opacity-100">
-                          {data.user.email}
+                        <span className="truncate text-xl font-display">Guest</span>
+                        <span className="truncate text-xs uppercase opacity-50">
+                          Not logged in
                         </span>
                       </div>
-                      <DotsVerticalIcon className="ml-auto size-4" />
                     </div>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-56 p-0" side="bottom" align="end" sideOffset={4}>
-                    <div className="flex flex-col">
-                      <button className="flex items-center px-4 py-2 text-sm hover:bg-accent">
-                        <MonkeyIcon className="mr-2 h-4 w-4" />
-                        Account
-                      </button>
-                      <button className="flex items-center px-4 py-2 text-sm hover:bg-accent">
-                        <GearIcon className="mr-2 h-4 w-4" />
-                        Settings
-                      </button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                  </div>
+                )}
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>

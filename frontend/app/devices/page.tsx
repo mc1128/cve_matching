@@ -45,12 +45,15 @@ import {
   RefreshCw,
   Link2,
   Zap,
+  Database,
+  Copy,
 } from "lucide-react"
 import {
   useDevices,
   useAssetComponents,
   useRefreshData,
   usePrefetchData,
+  useCPEMatching,
 } from "@/hooks/use-api-query"
 import { api } from "@/lib/api-client"
 import type { Device, AssetComponent, CPECandidate } from "@/lib/api-client"
@@ -74,100 +77,60 @@ function AssetComponents({
   setCpeModalOpen: React.Dispatch<React.SetStateAction<boolean>>
 }) {
   const { data: components, isLoading, error, refetch } = useAssetComponents(assetId)
-  const [loadingCPE, setLoadingCPE] = React.useState<number | null>(null)
   const { refreshAssetComponents } = useRefreshData()
+  const cpeMatching = useCPEMatching() // 🔥 새로운 CPE 매칭 훅 사용
 
-  // CPE 매칭 트리거 함수
+  // 🚀 실시간 CPE 매칭 트리거 함수 (기존 로직 대체)
   const handleCPEMatching = async (componentId: number) => {
-    setLoadingCPE(componentId)
-    console.log(`🔥 CPE 매칭 시작 - Component ID: ${componentId}`)
-    
     try {
-      console.log(`📡 API 호출: /api/components/${componentId}/cpe-match`)
-      const result = await api.triggerCPEMatching(componentId)
+      console.log(`🔥 CPE 매칭 시작 - Component ID: ${componentId}`)
       
-      console.log(`📦 API 응답:`, result)
+      // Mutation을 사용하여 실시간 업데이트
+      const result = await cpeMatching.mutateAsync(componentId)
       
-      // API 호출이 성공했는지 확인
-      if (result) {
-        const cpeResult = result
-        console.log(`🎯 CPE 매칭 결과:`, cpeResult)
-        console.log(`   - 성공여부: ${cpeResult.success}`)
-        console.log(`   - 메시지: ${cpeResult.message}`)
-        console.log(`   - 방법: ${cpeResult.method}`)
-        console.log(`   - 처리시간: ${cpeResult.processing_time}초`)
-        
-        if (cpeResult.success) {
-          // 성공적으로 매칭된 경우
-          console.log(`✅ CPE 매칭 성공!`)
-          console.log(`   - CPE: ${cpeResult.cpe_string}`)
-          console.log(`   - 신뢰도: ${cpeResult.confidence_score}`)
-          console.log(`   - 소스: ${cpeResult.source}`)
-          
-          if (cpeResult.method === 'automatic' || cpeResult.method === 'ai_assisted') {
-            alert(`✅ CPE 매칭 성공!\n방법: ${cpeResult.method}\nCPE: ${cpeResult.cpe_string}\n신뢰도: ${((cpeResult.confidence_score || 0) * 100).toFixed(1)}%`)
-          } else if (cpeResult.method === 'existing') {
-            alert(`✅ CPE가 이미 존재합니다.\nCPE: ${cpeResult.cpe_string}`)
-          } else {
-            alert(`✅ CPE 설정 완료!\n방법: ${cpeResult.method}\nCPE: ${cpeResult.cpe_string}`)
-          }
-          // 성공 시 컴포넌트 데이터 실시간 새로고침 - 다중 방법 적용
-          console.log(`🔄 컴포넌트 데이터 새로고침...`)
-          
-          // 1. React Query 캐시 새로고침
-          refreshAssetComponents(assetId)
-          
-          // 2. 직접 refetch 호출
-          setTimeout(() => {
-            refetch()
-            console.log(`🔄 직접 refetch 완료`)
-          }, 500)
-          
-          // 3. 추가 안전장치 - 1초 후 한번 더
-          setTimeout(() => {
-            refreshAssetComponents(assetId)
-            console.log(`🔄 추가 새로고침 완료`)
-          }, 1000)
+      console.log(`✅ CPE 매칭 완료:`, result)
+      
+      // 성공 메시지 표시
+      if (result.success) {
+        if (result.method === 'automatic' || result.method === 'ai_assisted') {
+          alert(`✅ CPE 매칭 성공!\n방법: ${result.method}\nCPE: ${result.cpe_string}\n신뢰도: ${((result.confidence_score || 0) * 100).toFixed(1)}%`)
+        } else if (result.method === 'existing') {
+          alert(`✅ CPE가 이미 존재합니다.\nCPE: ${result.cpe_string}`)
         } else {
-          // 매칭 실패한 경우
-          console.log(`❌ CPE 매칭 실패`)
-          console.log(`   - 이유: ${cpeResult.reason || cpeResult.message}`)
-          console.log(`   - 수동검토 필요: ${cpeResult.needs_manual_review}`)
-          console.log(`   - 후보 개수: ${cpeResult.candidates?.length || 0}`)
-          
-          // 수동 검토가 필요한 경우
-          if (cpeResult.needs_manual_review && cpeResult.candidates && cpeResult.candidates.length > 0) {
-            console.log(`🤔 후보 목록:`, cpeResult.candidates)
-            
-            // 컴포넌트 정보 찾기
-            const component = components?.find(c => c.component_id === componentId)
-            if (component) {
-              setCpeModalData({
-                componentId,
-                componentInfo: {
-                  vendor: component.vendor,
-                  product: component.product,
-                  version: component.version
-                },
-                candidates: cpeResult.candidates
-              })
-              setCpeModalOpen(true)
-            } else {
-              alert(`❌ 컴포넌트 정보를 찾을 수 없습니다.`)
-            }
-          } else {
-            alert(`❌ CPE 매칭 실패\n이유: ${cpeResult.message}\n\n자세한 내용은 개발자 도구 콘솔을 확인해주세요.`)
-          }
+          alert(`✅ CPE 설정 완료!\n방법: ${result.method}\nCPE: ${result.cpe_string}`)
         }
+        
+        // UI는 이미 optimistic update로 즉시 반영됨
+        console.log(`🎉 실시간 UI 업데이트 완료`)
       } else {
-        console.error(`❌ API 응답이 비어있음:`, result)
-        alert('❌ API 응답이 올바르지 않습니다.\n개발자 도구 콘솔을 확인해주세요.')
+        // 매칭 실패 - 수동 검토 필요한 경우
+        if (result.needs_manual_review && result.candidates && result.candidates.length > 0) {
+          console.log(`🤔 수동 검토 필요 - 후보 ${result.candidates.length}개`)
+          
+          // 컴포넌트 정보 찾기
+          const component = components?.find(c => c.component_id === componentId)
+          if (component) {
+            setCpeModalData({
+              componentId,
+              componentInfo: {
+                vendor: component.vendor,
+                product: component.product,
+                version: component.version
+              },
+              candidates: result.candidates
+            })
+            setCpeModalOpen(true)
+          } else {
+            alert(`❌ 컴포넌트 정보를 찾을 수 없습니다.`)
+          }
+        } else {
+          alert(`❌ CPE 매칭 실패\n이유: ${result.message}`)
+        }
       }
+      
     } catch (error) {
-      console.error('CPE matching failed:', error)
-      alert('❌ CPE 매칭 중 오류가 발생했습니다. 다시 시도해주세요.')
-    } finally {
-      setLoadingCPE(null)
+      console.error(`❌ CPE 매칭 실패:`, error)
+      alert(`❌ CPE 매칭 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
     }
   }
 
@@ -230,7 +193,7 @@ function AssetComponents({
               {components.length > 0 && "Scroll horizontally to view all columns on smaller screens"}
             </p>
             <div className="rounded-lg border-2 border-slate-200 dark:border-slate-700 overflow-auto bg-white dark:bg-slate-800 shadow-sm max-w-full">
-              <div className="min-w-[1080px]"> {/* 최소 너비 보장 */}
+              <div className="min-w-[1200px]"> {/* 최소 너비 증가 (CPE 컬럼 확장으로 인해) */}
                 <Table className="w-full table-fixed">
                   <TableHeader>
                     <TableRow className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 hover:from-slate-150 hover:to-slate-100 dark:hover:from-slate-750 dark:hover:to-slate-850 border-b-2 border-slate-200 dark:border-slate-600">
@@ -258,7 +221,7 @@ function AssetComponents({
                           Version
                         </div>
                       </TableHead>
-                      <TableHead className="w-[240px] font-bold text-slate-800 dark:text-slate-200 bg-amber-50 dark:bg-amber-900/30 border-r border-slate-200 dark:border-slate-600 px-4 py-4">
+                      <TableHead className="w-[320px] font-bold text-slate-800 dark:text-slate-200 bg-amber-50 dark:bg-amber-900/30 border-r border-slate-200 dark:border-slate-600 px-4 py-4">
                         <div className="flex items-center gap-2">
                           <Link2 className="h-4 w-4 text-amber-600" />
                           CPE
@@ -309,32 +272,46 @@ function AssetComponents({
                           {component.version || 'Unknown'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="w-[240px] py-4 px-4 border-r border-slate-200 dark:border-slate-600">
+                      <TableCell className="w-[320px] py-4 px-4 border-r border-slate-200 dark:border-slate-600">
                         {component.cpe_full_string ? (
                           <div className="flex items-center gap-2">
-                            <Badge 
-                              variant="outline" 
-                              className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800 font-mono text-xs w-full justify-start"
-                              title={component.cpe_full_string}
-                            >
-                              <Link2 className="h-3 w-3 mr-2 flex-shrink-0" />
-                              <span className="truncate">
-                                {component.cpe_full_string.length > 25 
-                                  ? `${component.cpe_full_string.substring(0, 25)}...` 
-                                  : component.cpe_full_string
-                                }
-                              </span>
-                            </Badge>
+                            <div className="w-full">
+                              <div 
+                                className="bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800 font-mono text-xs px-3 py-2 rounded-md flex items-start gap-2 w-full group hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors cursor-pointer"
+                                title={`Click to copy: ${component.cpe_full_string}`}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(component.cpe_full_string!);
+                                  // 간단한 피드백 표시
+                                  const element = document.activeElement as HTMLElement;
+                                  if (element) {
+                                    const originalTitle = element.title;
+                                    element.title = "Copied to clipboard!";
+                                    setTimeout(() => {
+                                      element.title = originalTitle;
+                                    }, 1000);
+                                  }
+                                }}
+                              >
+                                <Link2 className="h-3 w-3 mt-0.5 flex-shrink-0 text-green-600 dark:text-green-400" />
+                                <div className="break-all text-left leading-relaxed min-w-0 flex-1">
+                                  {component.cpe_full_string}
+                                </div>
+                                <Copy className="h-3 w-3 mt-0.5 flex-shrink-0 text-green-500 dark:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </div>
                           </div>
                         ) : (
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => handleCPEMatching(component.component_id)}
-                            disabled={loadingCPE === component.component_id}
+                            disabled={
+                              cpeMatching.isPending && 
+                              cpeMatching.variables === component.component_id
+                            }
                             className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:border-amber-300 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-900/30 w-full text-xs"
                           >
-                            {loadingCPE === component.component_id ? (
+                            {cpeMatching.isPending && cpeMatching.variables === component.component_id ? (
                               <>
                                 <RefreshCw className="h-3 w-3 mr-2 animate-spin" />
                                 Matching...
@@ -482,6 +459,10 @@ export default function DevicesPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [expandedAssets, setExpandedAssets] = useState<Set<number>>(new Set())
   
+  // 캐시 관리 상태
+  const [cacheClearing, setCacheClearing] = useState(false)
+  const [cacheInfo, setCacheInfo] = useState<any>(null)
+  
   // CPE 후보 모달 상태 - 메인 컴포넌트로 이동
   const [cpeModalOpen, setCpeModalOpen] = React.useState(false)
   const [cpeModalData, setCpeModalData] = React.useState<{
@@ -570,6 +551,43 @@ export default function DevicesPage() {
     refreshDevices()
   }
 
+  // 캐시 정보 조회
+  const handleGetCacheInfo = async () => {
+    try {
+      const response = await api.getCacheInfo()
+      setCacheInfo(response.data)
+    } catch (error) {
+      console.error('Failed to get cache info:', error)
+    }
+  }
+
+  // 컴포넌트 캐시 클리어
+  const handleClearComponentsCache = async () => {
+    try {
+      setCacheClearing(true)
+      const result = await api.clearComponentsCache()
+      
+      if (result.success) {
+        // 성공적으로 캐시 클리어 후 데이터 새로고침
+        refreshDevices()
+        
+        // 확장된 자산들의 컴포넌트도 새로고침
+        Array.from(expandedAssets).forEach(assetId => {
+          refreshAssetComponents(assetId)
+        })
+
+        alert(`캐시가 성공적으로 클리어되었습니다!\n클리어된 키: ${result.details?.total_cleared || 0}개`)
+      } else {
+        alert('캐시 클리어에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('Failed to clear cache:', error)
+      alert('캐시 클리어 중 오류가 발생했습니다.')
+    } finally {
+      setCacheClearing(false)
+    }
+  }
+
   return (
     <DashboardPageLayout
       header={{
@@ -651,6 +669,25 @@ export default function DevicesPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleGetCacheInfo}
+                title="View cache information"
+              >
+                <Database className="h-4 w-4 mr-2" />
+                Cache Info
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleClearComponentsCache}
+                disabled={cacheClearing}
+                title="Clear component cache to refresh data"
+              >
+                <Database className={`h-4 w-4 mr-2 ${cacheClearing ? 'animate-spin' : ''}`} />
+                {cacheClearing ? 'Clearing...' : 'Clear Cache'}
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -875,6 +912,64 @@ export default function DevicesPage() {
           candidates={cpeModalData.candidates}
           onCPESelected={handleCPESelected}
         />
+      )}
+
+      {/* 캐시 정보 표시 */}
+      {cacheInfo && (
+        <Dialog open={!!cacheInfo} onOpenChange={() => setCacheInfo(null)}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Cache Information
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium">Total Keys</Label>
+                  <p className="text-2xl font-bold text-blue-500">{cacheInfo.total_keys}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Active Entries</Label>
+                  <p className="text-2xl font-bold text-green-500">{cacheInfo.cache_stats.active_entries}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Expired Entries</Label>
+                  <p className="text-2xl font-bold text-orange-500">{cacheInfo.cache_stats.expired_entries}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Memory Usage</Label>
+                  <p className="text-2xl font-bold text-purple-500">{cacheInfo.cache_stats.memory_usage_mb.toFixed(2)} MB</p>
+                </div>
+              </div>
+              
+              {cacheInfo.sample_keys.length > 0 && (
+                <div>
+                  <Label className="text-sm font-medium">Sample Cache Keys:</Label>
+                  <ScrollArea className="h-32 w-full border rounded p-2 mt-2">
+                    <ul className="space-y-1">
+                      {cacheInfo.sample_keys.map((key: string, index: number) => (
+                        <li key={index} className="text-xs font-mono text-muted-foreground break-all">
+                          {key}
+                        </li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                </div>
+              )}
+              
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setCacheInfo(null)}>
+                  Close
+                </Button>
+                <Button onClick={handleClearComponentsCache} disabled={cacheClearing}>
+                  {cacheClearing ? 'Clearing...' : 'Clear Components Cache'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </DashboardPageLayout>
   )

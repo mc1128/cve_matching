@@ -3,6 +3,10 @@ fastapi==0.116.1
 uvicorn==0.35.0
 pydantic==2.11.7
 
+# 인증 및 보안
+PyJWT==2.8.0
+python-jose[cryptography]==3.3.0
+
 # 데이터베이스
 psycopg2-binary==2.9.10
 sqlalchemy==2.0.23

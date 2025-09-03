@@ -11,7 +11,7 @@ export const queryKeys = {
   chartData: (period: string) => ['chartData', period] as const,
 } as const;
 
-// 디바이스 목록 조회 (캐싱 적용)
+// 디바이스 목록 조회 (캐싱 최적화 적용)
 export function useDevices() {
   return useQuery({
     queryKey: queryKeys.devices,
@@ -22,14 +22,16 @@ export function useDevices() {
       }
       return response.data;
     },
-    // 5분간 데이터를 fresh하게 유지
-    staleTime: 5 * 60 * 1000,
-    // 30분간 캐시 보관
-    gcTime: 30 * 60 * 1000,
+    // 캐싱 최적화: 15분간 fresh 상태 유지 (디바이스 목록은 자주 변경되지 않음)
+    staleTime: 15 * 60 * 1000, // 15분
+    gcTime: 60 * 60 * 1000, // 1시간 보관
+    // 불필요한 리패치 최소화
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 
-// 자산 구성요소 조회 (캐싱 적용)
+// 자산 구성요소 조회 (캐싱 최적화 적용)
 export function useAssetComponents(assetId: number | null) {
   return useQuery({
     queryKey: queryKeys.assetComponents(assetId!),
@@ -44,14 +46,14 @@ export function useAssetComponents(assetId: number | null) {
     },
     // assetId가 null이면 쿼리 비활성화
     enabled: assetId !== null,
-    // 컴포넌트는 자주 변경될 수 있으므로 짧은 캐시로 변경
-    staleTime: 0, // 즉시 stale로 처리하여 새로고침 우선
-    gcTime: 5 * 60 * 1000, // 5분으로 단축
-    // 백그라운드에서 리패치 활성화
-    refetchOnWindowFocus: true,
+    // 캐싱 최적화: 10분간 fresh 상태 유지
+    staleTime: 10 * 60 * 1000, // 10분
+    gcTime: 30 * 60 * 1000, // 30분 보관
+    // 불필요한 리패치 최소화
+    refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    // 캐시된 데이터 즉시 반환하지 않고 새로운 데이터 우선
-    // placeholderData 제거
+    // 캐시된 데이터 우선 표시 후 백그라운드 업데이트
+    refetchOnMount: false,
   });
 }
 
@@ -183,4 +185,147 @@ export function usePrefetchData() {
     prefetchAssetComponents,
     prefetchMultipleAssetComponents,
   };
+}
+
+// CPE 매칭을 위한 Mutation 훅 (실시간 업데이트)
+export function useCPEMatching() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (componentId: number) => {
+      const response = await api.triggerCPEMatching(componentId);
+      if (!response.success) {
+        throw new Error(response.message || 'CPE matching failed');
+      }
+      return response;
+    },
+    
+    // 🔥 Optimistic Update: 즉시 UI에 로딩 상태 표시
+    onMutate: async (componentId: number) => {
+      // 모든 관련 asset의 컴포넌트 쿼리를 찾아서 업데이트
+      const queryCache = queryClient.getQueryCache();
+      const assetComponentQueries = queryCache.findAll({
+        predicate: (query) => {
+          return query.queryKey[0] === 'assetComponents';
+        }
+      });
+      
+      const previousDataMap = new Map();
+      
+      // 각 쿼리에서 해당 컴포넌트를 찾아 로딩 상태로 업데이트
+      for (const query of assetComponentQueries) {
+        const assetId = query.queryKey[1] as number;
+        const previousData = queryClient.getQueryData(queryKeys.assetComponents(assetId));
+        
+        if (previousData) {
+          previousDataMap.set(assetId, previousData);
+          
+          queryClient.setQueryData(
+            queryKeys.assetComponents(assetId),
+            (oldData: any[]) => {
+              return oldData?.map(comp => 
+                comp.component_id === componentId 
+                  ? { 
+                      ...comp, 
+                      cpe_matching_in_progress: true,
+                      cpe_matching_status: 'matching...'
+                    }
+                  : comp
+              ) || [];
+            }
+          );
+        }
+      }
+      
+      return { previousDataMap };
+    },
+    
+    // 🎯 성공 시 실제 데이터로 업데이트
+    onSuccess: (data, componentId, context) => {
+      const queryCache = queryClient.getQueryCache();
+      const assetComponentQueries = queryCache.findAll({
+        predicate: (query) => {
+          return query.queryKey[0] === 'assetComponents';
+        }
+      });
+      
+      // 성공한 컴포넌트 정보로 업데이트
+      for (const query of assetComponentQueries) {
+        const assetId = query.queryKey[1] as number;
+        
+        queryClient.setQueryData(
+          queryKeys.assetComponents(assetId),
+          (oldData: any[]) => {
+            return oldData?.map(comp => 
+              comp.component_id === componentId 
+                ? { 
+                    ...comp, 
+                    cpe_full_string: data.cpe_string,
+                    cpe_matching_in_progress: false,
+                    cpe_matching_status: 'completed',
+                    updated_at: data.timestamp,
+                    // CPE 매칭 메타데이터 추가
+                    cpe_matching_method: data.method,
+                    cpe_confidence_score: data.confidence_score
+                  }
+                : comp
+            ) || [];
+          }
+        );
+      }
+      
+      // 관련 캐시들도 무효화 (백그라운드에서 최신 데이터 가져오기)
+      queryClient.invalidateQueries({ 
+        queryKey: queryKeys.devices,
+        refetchType: 'none' // 즉시 리패치하지 않고 다음 접근시에만
+      });
+      
+      queryClient.invalidateQueries({ 
+        queryKey: queryKeys.dashboardStats,
+        refetchType: 'none'
+      });
+    },
+    
+    // ❌ 실패 시 이전 상태로 롤백
+    onError: (error, componentId, context) => {
+      if (context?.previousDataMap) {
+        // 이전 데이터로 롤백
+        for (const [assetId, previousData] of context.previousDataMap) {
+          queryClient.setQueryData(queryKeys.assetComponents(assetId), previousData);
+        }
+      }
+    },
+    
+    // 완료 후 정리
+    onSettled: (data, error, componentId) => {
+      // 로딩 상태 정리 (실패한 경우에도)
+      if (error) {
+        const queryCache = queryClient.getQueryCache();
+        const assetComponentQueries = queryCache.findAll({
+          predicate: (query) => {
+            return query.queryKey[0] === 'assetComponents';
+          }
+        });
+        
+        for (const query of assetComponentQueries) {
+          const assetId = query.queryKey[1] as number;
+          
+          queryClient.setQueryData(
+            queryKeys.assetComponents(assetId),
+            (oldData: any[]) => {
+              return oldData?.map(comp => 
+                comp.component_id === componentId 
+                  ? { 
+                      ...comp, 
+                      cpe_matching_in_progress: false,
+                      cpe_matching_status: 'failed'
+                    }
+                  : comp
+              ) || [];
+            }
+          );
+        }
+      }
+    }
+  });
 }

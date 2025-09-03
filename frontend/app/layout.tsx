@@ -4,6 +4,7 @@ import "./globals.css"
 import type { Metadata } from "next"
 import localFont from "next/font/local"
 import ClientLayout from "@/components/client-layout"
+import { ProtectedRoute } from "@/components/auth/protected-route"
 
 const robotoMono = Roboto_Mono({
   variable: "--font-roboto-mono",
@@ -36,7 +37,11 @@ export default function RootLayout({
         <link rel="preload" href="/fonts/Rebels-Fett.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
       </head>
       <body className={`${rebelGrotesk.variable} ${robotoMono.variable} antialiased dark`}>
-        <ClientLayout>{children}</ClientLayout>
+        <ClientLayout>
+          <ProtectedRoute>
+            {children}
+          </ProtectedRoute>
+        </ClientLayout>
       </body>
     </html>
   )
