@@ -65,6 +65,7 @@ export function AnimatedSidebar({ collapsed, setCollapsed }: AnimatedSidebarProp
   const sidebarRef = useRef<HTMLElement>(null)
   const { user, isAuthenticated, logout } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false)
 
   const handleLogout = async () => {
     if (isLoggingOut) return
@@ -78,12 +79,24 @@ export function AnimatedSidebar({ collapsed, setCollapsed }: AnimatedSidebarProp
         alert("로그아웃 중 오류가 발생했습니다.")
       } finally {
         setIsLoggingOut(false)
+        setIsPopoverOpen(false) // 로그아웃 후 팝오버 닫기
       }
     }
   }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // 팝오버가 열려있을 때는 외부 클릭으로 사이드바를 닫지 않음
+      if (isPopoverOpen) return
+      
+      // 팝오버 컨텐츠 영역인지 확인 (data-radix-popper-content-wrapper 속성으로 판별)
+      const target = event.target as Element
+      const isPopoverContent = target.closest('[data-radix-popper-content-wrapper]') || 
+                              target.closest('[role="dialog"]') ||
+                              target.closest('.popover-content')
+      
+      if (isPopoverContent) return
+      
       if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node) && !collapsed) {
         setCollapsed(true)
       }
@@ -93,7 +106,7 @@ export function AnimatedSidebar({ collapsed, setCollapsed }: AnimatedSidebarProp
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
-  }, [collapsed, setCollapsed])
+  }, [collapsed, setCollapsed, isPopoverOpen])
 
   if (collapsed) {
     return (
@@ -204,7 +217,7 @@ export function AnimatedSidebar({ collapsed, setCollapsed }: AnimatedSidebarProp
       <div className="border-t border-border px-4 py-4">
         <div className="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">USER</div>
         {isAuthenticated && user ? (
-          <Popover>
+          <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
             <PopoverTrigger className="flex gap-3 w-full group cursor-pointer rounded-lg p-2 hover:bg-accent transition-colors">
               <div className="shrink-0 flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground overflow-clip border-2 border-border">
                 <User className="h-6 w-6" />
@@ -215,7 +228,7 @@ export function AnimatedSidebar({ collapsed, setCollapsed }: AnimatedSidebarProp
               </div>
               <DotsVerticalIcon className="ml-auto size-4 text-muted-foreground" />
             </PopoverTrigger>
-            <PopoverContent className="w-56 p-0" side="top" align="end" sideOffset={4}>
+            <PopoverContent className="w-56 p-0 popover-content" side="top" align="end" sideOffset={4}>
               <div className="flex flex-col">
                 <div className="px-4 py-3 border-b">
                   <p className="text-sm font-medium">{user.user_name}</p>
@@ -228,7 +241,11 @@ export function AnimatedSidebar({ collapsed, setCollapsed }: AnimatedSidebarProp
                   variant="ghost"
                   size="sm"
                   className="justify-start px-4 py-2 h-auto rounded-none"
-                  onClick={handleLogout}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handleLogout()
+                  }}
                   disabled={isLoggingOut}
                 >
                   <LogOut className="mr-2 h-4 w-4" />

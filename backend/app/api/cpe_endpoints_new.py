@@ -165,8 +165,7 @@ def get_user_id_from_email(email: str, db_service: DatabaseService) -> Optional[
         query = "SELECT user_id FROM users WHERE email = %s"
         result = db_service.execute_query(query, (email,))
         if result and len(result) > 0:
-            # execute_query는 tuple의 리스트를 반환하므로 첫 번째 tuple의 첫 번째 요소를 반환
-            return result[0][0]
+            return result[0]['user_id']
         return None
     except Exception as e:
         print(f"Error getting user ID: {e}")
@@ -266,28 +265,17 @@ async def devices_list(
             
             devices_data = db_service.execute_query(query, (user_id,))
             
-            # 결과를 dictionary 형태로 변환 (execute_query는 항상 tuple의 리스트를 반환)
-            column_names = ['asset_id', 'hostname', 'ip_address', 'asset_type', 'owner_name', 'created_at', 'updated_at']
-            devices_list = []
-            for row in devices_data:
-                device_dict = dict(zip(column_names, row))
-                devices_list.append(device_dict)
-            
             # 날짜 포맷 변환
-            for device in devices_list:
+            for device in devices_data:
                 if device.get('created_at'):
-                    # datetime 객체를 ISO 형식 문자열로 변환
-                    if hasattr(device['created_at'], 'isoformat'):
-                        device['created_at'] = device['created_at'].isoformat()
+                    device['created_at'] = device['created_at'].isoformat()
                 if device.get('updated_at'):
-                    # datetime 객체를 ISO 형식 문자열로 변환
-                    if hasattr(device['updated_at'], 'isoformat'):
-                        device['updated_at'] = device['updated_at'].isoformat()
+                    device['updated_at'] = device['updated_at'].isoformat()
             
             return {
                 "success": True,
-                "data": devices_list,
-                "total": len(devices_list),
+                "data": devices_data,
+                "total": len(devices_data),
                 "timestamp": datetime.now().isoformat(),
                 "source": "database",
                 "user_id": user_id
@@ -337,43 +325,41 @@ async def create_asset(
                 (asset_data.hostname, asset_data.ip_address, asset_data.asset_type, user_id)
             )
             
-            # INSERT는 DML이므로 빈 리스트가 반환됨
-            # 마지막으로 생성된 자산을 조회
-            select_query = """
-                SELECT 
-                    a.asset_id,
-                    a.hostname,
-                    a.ip_address,
-                    a.asset_type,
-                    u.user_name as owner_name,
-                    a.created_at,
-                    a.updated_at
-                FROM assets a
-                LEFT JOIN users u ON a.owner_user_id = u.user_id
-                WHERE a.owner_user_id = %s
-                ORDER BY a.created_at DESC
-                LIMIT 1
-            """
-            
-            asset_details = db_service.execute_query(select_query, (user_id,))
-            
-            if asset_details and len(asset_details) > 0:
-                # tuple을 dictionary로 변환
-                column_names = ['asset_id', 'hostname', 'ip_address', 'asset_type', 'owner_name', 'created_at', 'updated_at']
-                asset_info = dict(zip(column_names, asset_details[0]))
+            if result and len(result) > 0:
+                new_asset = result[0]
                 
-                # 날짜 포맷 변환
-                if asset_info.get('created_at') and hasattr(asset_info['created_at'], 'isoformat'):
-                    asset_info['created_at'] = asset_info['created_at'].isoformat()
-                if asset_info.get('updated_at') and hasattr(asset_info['updated_at'], 'isoformat'):
-                    asset_info['updated_at'] = asset_info['updated_at'].isoformat()
+                # 생성된 자산 정보 조회
+                select_query = """
+                    SELECT 
+                        a.asset_id,
+                        a.hostname,
+                        a.ip_address,
+                        a.asset_type,
+                        u.user_name as owner_name,
+                        a.created_at,
+                        a.updated_at
+                    FROM assets a
+                    LEFT JOIN users u ON a.owner_user_id = u.user_id
+                    WHERE a.asset_id = %s
+                """
                 
-                return {
-                    "success": True,
-                    "message": "Asset created successfully",
-                    "data": asset_info,
-                    "timestamp": datetime.now().isoformat()
-                }
+                asset_details = db_service.execute_query(select_query, (new_asset['asset_id'],))
+                
+                if asset_details and len(asset_details) > 0:
+                    asset_info = asset_details[0]
+                    
+                    # 날짜 포맷 변환
+                    if asset_info.get('created_at'):
+                        asset_info['created_at'] = asset_info['created_at'].isoformat()
+                    if asset_info.get('updated_at'):
+                        asset_info['updated_at'] = asset_info['updated_at'].isoformat()
+                    
+                    return {
+                        "success": True,
+                        "message": "Asset created successfully",
+                        "data": asset_info,
+                        "timestamp": datetime.now().isoformat()
+                    }
             
             raise HTTPException(status_code=500, detail="Failed to create asset")
             
@@ -442,41 +428,39 @@ async def update_asset(
             
             result = db_service.execute_query(update_query, update_values)
             
-            # UPDATE 쿼리가 성공적으로 실행됨 (DML 쿼리는 빈 리스트 반환)
-            # 업데이트된 자산 정보 조회
-            select_query = """
-                SELECT 
-                    a.asset_id,
-                    a.hostname,
-                    a.ip_address,
-                    a.asset_type,
-                    u.user_name as owner_name,
-                    a.created_at,
-                    a.updated_at
-                FROM assets a
-                LEFT JOIN users u ON a.owner_user_id = u.user_id
-                WHERE a.asset_id = %s
-            """
-            
-            asset_details = db_service.execute_query(select_query, (asset_id,))
-            
-            if asset_details and len(asset_details) > 0:
-                # tuple을 dictionary로 변환
-                column_names = ['asset_id', 'hostname', 'ip_address', 'asset_type', 'owner_name', 'created_at', 'updated_at']
-                asset_info = dict(zip(column_names, asset_details[0]))
+            if result and len(result) > 0:
+                # 업데이트된 자산 정보 조회
+                select_query = """
+                    SELECT 
+                        a.asset_id,
+                        a.hostname,
+                        a.ip_address,
+                        a.asset_type,
+                        u.user_name as owner_name,
+                        a.created_at,
+                        a.updated_at
+                    FROM assets a
+                    LEFT JOIN users u ON a.owner_user_id = u.user_id
+                    WHERE a.asset_id = %s
+                """
                 
-                # 날짜 포맷 변환
-                if asset_info.get('created_at') and hasattr(asset_info['created_at'], 'isoformat'):
-                    asset_info['created_at'] = asset_info['created_at'].isoformat()
-                if asset_info.get('updated_at') and hasattr(asset_info['updated_at'], 'isoformat'):
-                    asset_info['updated_at'] = asset_info['updated_at'].isoformat()
+                asset_details = db_service.execute_query(select_query, (asset_id,))
                 
-                return {
-                    "success": True,
-                    "message": "Asset updated successfully",
-                    "data": asset_info,
-                    "timestamp": datetime.now().isoformat()
-                }
+                if asset_details and len(asset_details) > 0:
+                    asset_info = asset_details[0]
+                    
+                    # 날짜 포맷 변환
+                    if asset_info.get('created_at'):
+                        asset_info['created_at'] = asset_info['created_at'].isoformat()
+                    if asset_info.get('updated_at'):
+                        asset_info['updated_at'] = asset_info['updated_at'].isoformat()
+                    
+                    return {
+                        "success": True,
+                        "message": "Asset updated successfully",
+                        "data": asset_info,
+                        "timestamp": datetime.now().isoformat()
+                    }
             
             raise HTTPException(status_code=500, detail="Failed to update asset")
             
@@ -516,8 +500,7 @@ async def delete_asset(
             if not ownership_check:
                 raise HTTPException(status_code=403, detail="Not authorized to delete this asset")
             
-            # tuple을 처리 (asset_id, hostname)
-            asset_hostname = ownership_check[0][1]
+            asset_info = ownership_check[0]
             
             # 관련 컴포넌트들 먼저 삭제
             delete_components_query = "DELETE FROM asset_components WHERE asset_id = %s"
@@ -529,7 +512,7 @@ async def delete_asset(
             
             return {
                 "success": True,
-                "message": f"Asset '{asset_hostname}' deleted successfully",
+                "message": f"Asset '{asset_info['hostname']}' deleted successfully",
                 "deleted_asset_id": asset_id,
                 "timestamp": datetime.now().isoformat()
             }

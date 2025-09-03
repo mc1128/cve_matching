@@ -84,6 +84,7 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
   const isV0 = useIsV0()
   const { user, isAuthenticated, logout } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false)
 
   const handleLogout = async () => {
     if (isLoggingOut) return
@@ -97,6 +98,7 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
         alert("로그아웃 중 오류가 발생했습니다.")
       } finally {
         setIsLoggingOut(false)
+        setIsPopoverOpen(false) // 로그아웃 후 팝오버 닫기
       }
     }
   }
@@ -171,7 +173,7 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
             <SidebarMenu>
               <SidebarMenuItem>
                 {isAuthenticated && user ? (
-                  <Popover>
+                  <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                     <PopoverTrigger className="flex gap-0.5 w-full group cursor-pointer">
                       <div className="shrink-0 flex size-14 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground overflow-clip">
                         <User className="h-8 w-8" />
@@ -186,7 +188,7 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
                         <DotsVerticalIcon className="ml-auto size-4" />
                       </div>
                     </PopoverTrigger>
-                    <PopoverContent className="w-56 p-0" side="bottom" align="end" sideOffset={4}>
+                    <PopoverContent className="w-56 p-0 popover-content" side="bottom" align="end" sideOffset={4}>
                       <div className="flex flex-col">
                         <div className="px-4 py-3 border-b">
                           <p className="text-sm font-medium">{user.user_name}</p>
@@ -199,7 +201,11 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
                           variant="ghost"
                           size="sm"
                           className="justify-start px-4 py-2 h-auto rounded-none"
-                          onClick={handleLogout}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleLogout()
+                          }}
                           disabled={isLoggingOut}
                         >
                           <LogOut className="mr-2 h-4 w-4" />

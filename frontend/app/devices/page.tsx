@@ -463,6 +463,16 @@ export default function DevicesPage() {
   const [cacheClearing, setCacheClearing] = useState(false)
   const [cacheInfo, setCacheInfo] = useState<any>(null)
   
+  // 자산 관리 상태
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [selectedAsset, setSelectedAsset] = useState<Device | null>(null)
+  const [formData, setFormData] = useState({
+    hostname: "",
+    ip_address: "",
+    asset_type: ""
+  })
+  
   // CPE 후보 모달 상태 - 메인 컴포넌트로 이동
   const [cpeModalOpen, setCpeModalOpen] = React.useState(false)
   const [cpeModalData, setCpeModalData] = React.useState<{
@@ -478,6 +488,76 @@ export default function DevicesPage() {
   const { data: assets, isLoading, error, refetch } = useDevices()
   const { refreshDevices, refreshAssetComponents } = useRefreshData()
   const { prefetchAssetComponents, prefetchMultipleAssetComponents } = usePrefetchData()
+
+  // 자산 관리 함수들
+  const resetForm = () => {
+    setFormData({
+      hostname: "",
+      ip_address: "",
+      asset_type: ""
+    })
+    setSelectedAsset(null)
+  }
+
+  const openAddDialog = () => {
+    resetForm()
+    setIsAddDialogOpen(true)
+  }
+
+  const openEditDialog = (asset: Device) => {
+    setFormData({
+      hostname: asset.hostname,
+      ip_address: asset.ip_address,
+      asset_type: asset.asset_type
+    })
+    setSelectedAsset(asset)
+    setIsEditDialogOpen(true)
+  }
+
+  const openDeleteDialog = (asset: Device) => {
+    setSelectedAsset(asset)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleAddAsset = async () => {
+    try {
+      await api.createAsset(formData)
+      setIsAddDialogOpen(false)
+      resetForm()
+      refetch() // 자산 목록 새로고침
+    } catch (error) {
+      console.error('Failed to add asset:', error)
+      alert('자산 추가에 실패했습니다.')
+    }
+  }
+
+  const handleEditAsset = async () => {
+    if (!selectedAsset) return
+    
+    try {
+      await api.updateAsset(selectedAsset.asset_id, formData)
+      setIsEditDialogOpen(false)
+      resetForm()
+      refetch() // 자산 목록 새로고침
+    } catch (error) {
+      console.error('Failed to update asset:', error)
+      alert('자산 수정에 실패했습니다.')
+    }
+  }
+
+  const handleDeleteAsset = async () => {
+    if (!selectedAsset) return
+    
+    try {
+      await api.deleteAsset(selectedAsset.asset_id)
+      setIsDeleteDialogOpen(false)
+      setSelectedAsset(null)
+      refetch() // 자산 목록 새로고침
+    } catch (error) {
+      console.error('Failed to delete asset:', error)
+      alert('자산 삭제에 실패했습니다.')
+    }
+  }
 
   // CPE 선택 완료 후 처리 함수
   const handleCPESelected = () => {
@@ -699,7 +779,7 @@ export default function DevicesPage() {
               </Button>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button>
+                  <Button onClick={openAddDialog}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Asset
                   </Button>
@@ -711,15 +791,28 @@ export default function DevicesPage() {
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
                       <Label htmlFor="hostname">Hostname</Label>
-                      <Input id="hostname" placeholder="e.g., WebServer-Prod-01" />
+                      <Input 
+                        id="hostname" 
+                        placeholder="e.g., WebServer-Prod-01" 
+                        value={formData.hostname}
+                        onChange={(e) => setFormData(prev => ({ ...prev, hostname: e.target.value }))}
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="ip-address">IP Address</Label>
-                      <Input id="ip-address" placeholder="e.g., 192.168.1.10" />
+                      <Input 
+                        id="ip-address" 
+                        placeholder="e.g., 192.168.1.10" 
+                        value={formData.ip_address}
+                        onChange={(e) => setFormData(prev => ({ ...prev, ip_address: e.target.value }))}
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="asset-type">Asset Type</Label>
-                      <Select>
+                      <Select 
+                        value={formData.asset_type} 
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, asset_type: value }))}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select asset type" />
                         </SelectTrigger>
@@ -731,26 +824,17 @@ export default function DevicesPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="owner">Owner</Label>
-                      <Select>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select owner" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">KRIMSON</SelectItem>
-                          <SelectItem value="2">MATI</SelectItem>
-                          <SelectItem value="3">PEK</SelectItem>
-                          <SelectItem value="4">JOYBOY</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={() => setIsAddDialogOpen(false)}>Add Asset</Button>
+                    <Button 
+                      onClick={handleAddAsset}
+                      disabled={!formData.hostname || !formData.ip_address || !formData.asset_type}
+                    >
+                      Add Asset
+                    </Button>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -858,7 +942,10 @@ export default function DevicesPage() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 hover:bg-slate-200 dark:hover:bg-slate-700"
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openEditDialog(asset)
+                                }}
                               >
                                 <Edit className="h-4 w-4 text-slate-600 dark:text-slate-400" />
                               </Button>
@@ -866,7 +953,10 @@ export default function DevicesPage() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 hover:bg-red-100 dark:hover:bg-red-900/30"
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openDeleteDialog(asset)
+                                }}
                               >
                                 <Trash2 className="h-4 w-4 text-red-500" />
                               </Button>
@@ -913,6 +1003,107 @@ export default function DevicesPage() {
           onCPESelected={handleCPESelected}
         />
       )}
+
+      {/* Edit Asset Modal */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Asset</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-hostname">Hostname</Label>
+              <Input 
+                id="edit-hostname" 
+                placeholder="e.g., WebServer-Prod-01" 
+                value={formData.hostname}
+                onChange={(e) => setFormData(prev => ({ ...prev, hostname: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-ip-address">IP Address</Label>
+              <Input 
+                id="edit-ip-address" 
+                placeholder="e.g., 192.168.1.10" 
+                value={formData.ip_address}
+                onChange={(e) => setFormData(prev => ({ ...prev, ip_address: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-asset-type">Asset Type</Label>
+              <Select 
+                value={formData.asset_type} 
+                onValueChange={(value) => setFormData(prev => ({ ...prev, asset_type: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select asset type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Server">Server</SelectItem>
+                  <SelectItem value="Laptop">Laptop</SelectItem>
+                  <SelectItem value="Mobile">Mobile Device</SelectItem>
+                  <SelectItem value="Network">Network Device</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleEditAsset}
+              disabled={!formData.hostname || !formData.ip_address || !formData.asset_type}
+            >
+              Update Asset
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Asset Confirmation Modal */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Delete Asset
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Are you sure you want to delete this asset? This action cannot be undone.
+            </p>
+            {selectedAsset && (
+              <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Hostname:</span>
+                  <span className="text-sm">{selectedAsset.hostname}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">IP Address:</span>
+                  <span className="text-sm">{selectedAsset.ip_address}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Type:</span>
+                  <span className="text-sm">{selectedAsset.asset_type}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={handleDeleteAsset}
+            >
+              Delete Asset
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 캐시 정보 표시 */}
       {cacheInfo && (
