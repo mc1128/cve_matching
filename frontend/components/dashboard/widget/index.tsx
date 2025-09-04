@@ -22,7 +22,7 @@ export default function Widget({ widgetData }: WidgetProps) {
   }, [])
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString("en-US", {
+    return date.toLocaleTimeString("ko-KR", {
       hour12: true,
       hour: "numeric",
       minute: "2-digit",
@@ -30,10 +30,10 @@ export default function Widget({ widgetData }: WidgetProps) {
   }
 
   const formatDate = (date: Date) => {
-    const dayOfWeek = date.toLocaleDateString("en-US", {
+    const dayOfWeek = date.toLocaleDateString("ko-KR", {
       weekday: "long",
     })
-    const restOfDate = date.toLocaleDateString("en-US", {
+    const restOfDate = date.toLocaleDateString("ko-KR", {
       year: "numeric",
       month: "long",
       day: "numeric",

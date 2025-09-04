@@ -565,9 +565,9 @@ async def asset_components(asset_id: int, db_service: DatabaseService = Depends(
             
             # 날짜 포맷 변환
             for component in components_data:
-                if component.get('created_at'):
+                if component.get('created_at') and hasattr(component['created_at'], 'isoformat'):
                     component['created_at'] = component['created_at'].isoformat()
-                if component.get('updated_at'):
+                if component.get('updated_at') and hasattr(component['updated_at'], 'isoformat'):
                     component['updated_at'] = component['updated_at'].isoformat()
             
             return {
