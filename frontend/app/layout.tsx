@@ -19,8 +19,8 @@ const rebelGrotesk = localFont({
 
 export const metadata: Metadata = {
   title: {
-    template: "%s – M.O.N.K.Y OS",
-    default: "M.O.N.K.Y OS",
+    template: "%s – 취.꼼.마",
+    default: "취.꼼.마",
   },
   description: "The ultimate OS for rebels. Making the web for brave individuals.",
     generator: 'v0.app'

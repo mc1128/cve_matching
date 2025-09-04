@@ -19,6 +19,7 @@ try:
     from app.services.database_service import get_db_service, DatabaseService
     from app.services.cache_service import invalidate_component_cache, get_cache_info, cache
     from app.api.auth_endpoints import verify_token  # JWT 토큰 검증 함수 import
+    from app.services.nvd_cpe_client import get_nvd_cpe_client
     USE_DATABASE = True
     print("✅ Database service imported successfully")
 except ImportError as e:
@@ -693,23 +694,25 @@ async def trigger_cpe_matching(component_id: int, db_service: DatabaseService = 
                 raise HTTPException(status_code=404, detail="Component not found")
             
             component = component_result[0]
+            # component는 튜플: (component_id, vendor, product, version, cpe_full_string)
+            component_id_db = component[0]
+            vendor = component[1] or ''
+            product = component[2] or ''
+            version = component[3] or ''
+            cpe_full_string = component[4]
             
             # 이미 CPE가 있는지 확인
-            if component.get('cpe_full_string'):
+            if cpe_full_string:
                 return {
                     "success": True,
                     "message": "CPE already exists for this component",
                     "component_id": component_id,
-                    "cpe_string": component['cpe_full_string'],
+                    "cpe_string": cpe_full_string,
                     "method": "existing",
                     "timestamp": datetime.now().isoformat()
                 }
             
-            # CPE 자동 생성
-            vendor = component.get('vendor', '')
-            product = component.get('product', '')
-            version = component.get('version', '')
-            
+            # Product가 없으면 매칭 불가
             if not product:
                 return {
                     "success": False,
@@ -719,37 +722,74 @@ async def trigger_cpe_matching(component_id: int, db_service: DatabaseService = 
                     "timestamp": datetime.now().isoformat()
                 }
             
-            # 간단한 CPE 생성 (실제로는 더 복잡한 매칭 로직이 필요)
-            cpe_string = generate_cpe_string(vendor, product, version)
-            confidence_score = 0.8  # 기본 신뢰도
+            # 실제 NVD API를 통한 CPE 후보 검색
+            nvd_client = get_nvd_cpe_client()
+            match_result = nvd_client.find_best_cpe_match(vendor, product, version)
             
-            # 데이터베이스에 CPE 업데이트
-            update_query = """
-                UPDATE asset_components 
-                SET cpe_full_string = %s, updated_at = NOW()
-                WHERE component_id = %s
-            """
-            db_service.execute_query(update_query, (cpe_string, component_id))
+            # NVD 검색 결과가 없으면 수동 검토 필요
+            if not match_result.success or not match_result.results:
+                return {
+                    "success": False,
+                    "message": "No matching CPE found from NVD. Manual review required.",
+                    "component_id": component_id,
+                    "needs_manual_review": True,
+                    "candidates": [],
+                    "timestamp": datetime.now().isoformat()
+                }
             
-            # 🔥 CPE 매칭 성공 후 관련 캐시 무효화
-            from app.services.cache_service import invalidate_component_cache
-            invalidate_component_cache(component_id)
-            
-            result_data = {
-                "success": True,
-                "message": "CPE matching completed successfully",
-                "component_id": component_id,
-                "cpe_string": cpe_string,
-                "method": "automatic",
-                "confidence_score": confidence_score,
-                "timestamp": datetime.now().isoformat(),
-                "cache_invalidated": True
-            }
-            
-            return result_data
+            # 추천 CPE가 있고 신뢰도가 높으면 자동 적용
+            if match_result.recommended_cpe and match_result.confidence_score >= 0.6:
+                cpe_string = match_result.recommended_cpe
+                confidence_score = match_result.confidence_score
+                
+                # 데이터베이스에 CPE 업데이트
+                update_query = """
+                    UPDATE asset_components 
+                    SET cpe_full_string = %s, updated_at = NOW()
+                    WHERE component_id = %s
+                """
+                db_service.execute_query(update_query, (cpe_string, component_id))
+                
+                # 🔥 CPE 매칭 성공 후 관련 캐시 무효화
+                from app.services.cache_service import invalidate_component_cache
+                invalidate_component_cache(component_id)
+                
+                return {
+                    "success": True,
+                    "message": f"CPE matched automatically with {confidence_score:.1%} confidence",
+                    "component_id": component_id,
+                    "cpe_string": cpe_string,
+                    "method": "automatic",
+                    "confidence_score": confidence_score,
+                    "source": "NVD",
+                    "timestamp": datetime.now().isoformat(),
+                    "cache_invalidated": True
+                }
+            else:
+                # 신뢰도가 낮으면 수동 검토 필요
+                candidates = []
+                for result in match_result.results[:5]:  # 상위 5개만
+                    candidates.append({
+                        "cpe_name": result.cpe_name,
+                        "title": result.title,
+                        "vendor": result.vendor,
+                        "product": result.product,
+                        "version": result.version,
+                        "match_score": result.match_score,
+                        "deprecated": result.deprecated
+                    })
+                
+                return {
+                    "success": False,
+                    "message": f"Multiple CPE candidates found. Manual review recommended (best score: {match_result.confidence_score:.1%})",
+                    "component_id": component_id,
+                    "needs_manual_review": True,
+                    "candidates": candidates,
+                    "timestamp": datetime.now().isoformat()
+                }
             
         else:
-            # Mock 응답
+            # Mock 응답 (DB 연결 없을 시)
             return {
                 "success": True,
                 "message": "CPE matching completed (mock)",

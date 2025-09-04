@@ -50,9 +50,9 @@ const data = {
     },
   ],
   user: {
-    name: "KRIMSON",
-    email: "krimson@joyco.studio",
-    avatar: "/avatars/user_krimson.png",
+    name: "CVE 분석가",
+    email: "analyst@security.com",
+    avatar: "",
   },
 }
 

@@ -1,8 +1,8 @@
-import Image from "next/image";
 import type { ChatConversation } from "@/types/chat";
 import { formatDate } from "./utils";
 import { mockChatData } from "@/data/chat-mock";
 import { cn } from "@/lib/utils";
+import ColorAvatar from "./color-avatar";
 
 interface ChatPreviewProps {
   conversation: ChatConversation;
@@ -25,13 +25,7 @@ export default function ChatPreview({
       onClick={() => onOpenConversation(conversation.id)}
     >
       <div className="relative">
-        <Image
-          src={user.avatar}
-          alt={user.name}
-          width={96}
-          height={96}
-          className="rounded-lg size-14"
-        />
+        <ColorAvatar userId={user.id} name={user.name} size="lg" />
         {conversation.unreadCount > 0 && (
           <div className="absolute -top-2 -left-2 bg-primary text-primary-foreground text-xs size-5 rounded flex items-center justify-center font-semibold border-2 border-background">
             {conversation.unreadCount}

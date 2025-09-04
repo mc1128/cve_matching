@@ -91,7 +91,7 @@ export function ChatHeader({
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
             <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
           </div>
-          <span className="text-xs text-muted-foreground">AI READY</span>
+          <span className="text-xs text-muted-foreground">AI 준비완료</span>
         </div>
 
         {/* Dynamic Title */}
@@ -100,21 +100,21 @@ export function ChatHeader({
             // Mobile variant
             if (variant === "mobile") {
               if (chatState.state === "conversation") {
-                return "M.O.N.K.Y AI"
+                return "취꼼마 AI"
               }
-              return "AI ASSISTANT"
+              return "AI 어시스턴트"
             }
 
             // Desktop variant
             if (chatState.state === "collapsed") {
-              return shouldHighlightUnreadMessages ? `AI RESPONSE READY` : "M.O.N.K.Y AI"
+              return shouldHighlightUnreadMessages ? `AI 응답 준비완료` : "취꼼마 AI"
             }
 
             if (chatState.state === "conversation") {
-              return "SECURITY AI ASSISTANT"
+              return "보안 AI 어시스턴트"
             }
 
-            return "AI ASSISTANT"
+            return "AI 어시스턴트"
           })()}
         </span>
       </motion.div>

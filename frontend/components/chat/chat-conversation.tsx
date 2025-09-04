@@ -157,11 +157,11 @@ export default function ChatConversation({
         <Input
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          placeholder={`Message ${
+          placeholder={`${
             activeConversation.participants.find(
-              (p) => p.id !== "joyboy" // Using current user ID
+              (p) => p.id !== "analyst" // Using current user ID
             )?.name
-          }`}
+          }에게 메시지 보내기`}
           className="flex-1 rounded-none border-none text-foreground placeholder-foreground/40 text-sm"
           onKeyDown={(e) => {
             if (e.key === "Enter") onSendMessage();

@@ -1,7 +1,7 @@
-import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import type { ChatConversation, ChatUser } from "@/types/chat";
 import { formatDate } from "./utils";
+import ColorAvatar from "./color-avatar";
 
 interface ChatContactProps {
   conversation: ChatConversation;
@@ -26,13 +26,7 @@ export default function ChatContact({
       )}
 
       <div className="relative">
-        <Image
-          src={otherUser.avatar}
-          alt={otherUser.name}
-          width={40}
-          height={40}
-          className="rounded-lg"
-        />
+        <ColorAvatar userId={otherUser.id} name={otherUser.name} size="md" />
       </div>
 
       <div className="flex-1 min-w-0">
